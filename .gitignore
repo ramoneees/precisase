@@ -1,0 +1,36 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Coverage / test artifacts
+coverage/
+.nyc_output/
+
+# Local secrets / scratch
+*.local
+tmp/
