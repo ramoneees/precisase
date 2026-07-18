@@ -1,0 +1,45 @@
+# Production override — ARCHITECTURE.md §8.2.
+#
+# Minimal overrides on top of the base stack: stricter restart policy and
+# resource ceilings appropriate for the always-on production deployment on
+# Ramon's server (16GB RAM) per §2.1/§13.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  web:
+    container_name: precisase-web
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  worker:
+    container_name: precisase-worker
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  db:
+    container_name: precisase-db
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  caddy:
+    container_name: precisase-caddy
+    restart: always
+
+  cloudflared:
+    container_name: precisase-cloudflared
+    restart: always
+
+  backup:
+    container_name: precisase-backup
+    restart: always

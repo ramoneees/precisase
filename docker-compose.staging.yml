@@ -1,0 +1,40 @@
+# Staging override — ARCHITECTURE.md §8.2.
+#
+# "Staging uses its own database container and a staging Cloudflare Tunnel
+# hostname." Migrations run via `prisma migrate deploy` on container start
+# (handled inside the app's own start script/entrypoint, not here).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+
+services:
+  web:
+    container_name: precisase-web-staging
+    environment:
+      NODE_ENV: production
+      APP_URL: ${STAGING_APP_URL:-https://staging.precisase.example}
+
+  worker:
+    container_name: precisase-worker-staging
+
+  # Staging's "own database container" — a distinct container/volume from
+  # prod so a staging restore drill (§8.3: weekly restore-latest-backup
+  # rehearsal) can never touch production data.
+  db:
+    container_name: precisase-db-staging
+    volumes:
+      - db_data_staging:/var/lib/postgresql/data
+
+  caddy:
+    container_name: precisase-caddy-staging
+
+  # Staging Cloudflare Tunnel hostname/token — separate tunnel from prod.
+  cloudflared:
+    container_name: precisase-cloudflared-staging
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN_STAGING}"]
+
+  backup:
+    container_name: precisase-backup-staging
+
+volumes:
+  db_data_staging:

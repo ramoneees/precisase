@@ -1,0 +1,31 @@
+# Minimal reverse proxy config (ARCHITECTURE.md §3.1, §4.7, §7.3).
+#
+# Caddy sits behind cloudflared: the tunnel daemon forwards traffic to Caddy
+# over the internal Compose network, Caddy forwards it to the `web` service.
+# No inbound host ports are opened anywhere in this chain (§7.3).
+#
+# {$CADDY_SITE_ADDRESS} is set per environment (see .env.example):
+#   - local/dev:  :80              (plain HTTP, fine on an internal network)
+#   - staging:    staging.example.com
+#   - prod:       precisa-se.casadacidade.com (placeholder, see ARCH §12 Q12)
+# When a real hostname is supplied, Caddy will automatically obtain/renew a
+# TLS certificate itself — this is the "TLS fallback" mentioned in §4.7/§13,
+# in case the Cloudflare Tunnel path is ever bypassed or down.
+
+{$CADDY_SITE_ADDRESS:.:80} {
+	encode gzip
+
+	# Reverse proxy to the Next.js `web` service on the internal
+	# Compose network (service name resolves via Docker's embedded DNS).
+	reverse_proxy web:3000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -1,0 +1,196 @@
+# Precisa-se — base Docker Compose stack.
+#
+# Authoritative spec: docs/ARCHITECTURE.md §3.1 (system diagram), §8.1
+# (service list), §7.3/§7.4 (network & secrets). Environment-specific
+# overrides live in docker-compose.staging.yml / docker-compose.prod.yml
+# (§8.2) — merge them in with `-f docker-compose.yml -f docker-compose.<env>.yml`.
+#
+# Network posture (§7.3): NO service in this file publishes a host port.
+# The only public entry point is `cloudflared`, which makes an *outbound*
+# connection to Cloudflare's edge and tunnels inbound traffic back down to
+# `caddy` over the internal Compose network — the host never listens on an
+# inbound port. `db` and `redis` are bound to the internal network only.
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  db_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  backup_data:
+
+services:
+  # ---------------------------------------------------------------------
+  # web — Next.js app (UI + Route Handlers + Auth.js). §3.1, §3.2.
+  # ---------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: precisase-app:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    # No `ports:` — Caddy reaches this service over the internal network
+    # (see Caddyfile: `reverse_proxy web:3000`).
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------
+  # worker — SAME image as `web`, different command. §3.1: "Notification
+  # worker, same image, different command."
+  #
+  # PLACEHOLDER: the notification worker (email dispatch via Resend, retry
+  # with backoff — §3.2, §6.2/§6.3) has not been implemented yet. The
+  # command below intentionally does nothing except stay alive and log,
+  # so `docker compose up` succeeds end-to-end without a real worker
+  # codebase. Replace this `command:` once src/server/worker (or similar)
+  # exists — no Dockerfile or image change is required, per §3.1's whole
+  # point of reusing one image.
+  # ---------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: precisase-app:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    command:
+      [
+        "node",
+        "-e",
+        "console.log('[worker] PLACEHOLDER — notification worker not implemented yet (ARCHITECTURE.md §3.1, §6.2, §6.3). Idling.'); setInterval(() => {}, 1 << 30);",
+      ]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # ---------------------------------------------------------------------
+  # db — PostgreSQL 16, primary data store. §4.3, §7.3 (internal only).
+  # ---------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    # Deliberately no `ports:` mapping — bound to the Compose network only.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------
+  # redis — OPTIONAL per §4.7/§8.1 ("optionally redis"): session store /
+  # future queue backend. Not required for MVP if Auth.js uses DB-backed
+  # sessions. Defined here but placed behind the `optional` profile so it
+  # is NOT started by a plain `docker compose up` — enable it explicitly
+  # with `docker compose --profile optional up`.
+  # ---------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    profiles:
+      - optional
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    # Deliberately no `ports:` mapping — bound to the Compose network only.
+
+  # ---------------------------------------------------------------------
+  # caddy — reverse proxy + TLS fallback. §4.7, §7.3.
+  # ---------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    networks:
+      - internal
+    # No `ports:` — cloudflared reaches Caddy over the internal network;
+    # the host itself never opens an inbound port (§7.3).
+
+  # ---------------------------------------------------------------------
+  # cloudflared — Cloudflare Tunnel daemon, egress-only. §4.7, §7.3.
+  # ---------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN}"]
+    depends_on:
+      - caddy
+    networks:
+      - internal
+    # No `ports:` at all — this daemon only ever makes outbound
+    # connections to Cloudflare's edge; inbound tunnel traffic is routed
+    # back down to `caddy` over the internal Compose network.
+
+  # ---------------------------------------------------------------------
+  # backup — scheduled pg_dump. §8.1, §8.3 (daily at 02:00, NAS-replicated).
+  # ---------------------------------------------------------------------
+  backup:
+    build:
+      context: ./docker/backup
+      dockerfile: Dockerfile
+    image: precisase-backup:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-30}
+      BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-12}
+    volumes:
+      # In production, bind-mount this to the NAS-replicated path instead
+      # of a named volume (Tiago's / Rafa-Rui's NAS, per §8.3 and CLAUDE.md
+      # "Available infrastructure"). A named volume is used here so the
+      # base file works out of the box in any environment.
+      - backup_data:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal

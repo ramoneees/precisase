@@ -1,0 +1,38 @@
+# Build context optimization for the Dockerfile (multi-stage build, see §8).
+node_modules
+.next
+out
+dist
+build
+coverage
+.nyc_output
+
+# Env / secrets — never send these into the build context.
+.env
+.env.*
+!.env.example
+
+# VCS / editor / OS noise
+.git
+.gitignore
+.github
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Docs, not needed inside the image
+docs
+Requisitos_MVP_Casa_da_Cidade.docx
+README.md
+CLAUDE.md
+
+# Test artifacts
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# User-uploaded post photos (local dev only — see
+# src/app/api/uploads/route.ts and the .gitignore note above).
+public/uploads
