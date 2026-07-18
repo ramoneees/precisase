@@ -1,0 +1,293 @@
+// Prisma schema for "Precisa-se" (Casa da Cidade Community Platform).
+//
+// This is the data-layer implementation of docs/ARCHITECTURE.md §5 (data
+// model). Field names, types, constraints, and indexes follow that document
+// exactly — see §5.1 (entities), §5.2 (relationships), §5.3 (Post state
+// machine), and §7 (security: argon2id hashing, app-layer encryption of
+// Post.contact_value).
+//
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pgcrypto, citext, pg_trgm]
+}
+
+// ---------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------
+
+/// User.role — RBAC roles for human accounts (§4.4, §7.2).
+enum Role {
+  user
+  moderator
+  admin
+
+  @@map("role")
+}
+
+/// ApiKey.role — machine clients are always `service` (§4.4, §4.9).
+enum ApiKeyRole {
+  service
+
+  @@map("api_key_role")
+}
+
+/// Post.type — a need ("request") or something offered ("offer").
+enum PostType {
+  request
+  offer
+
+  @@map("post_type")
+}
+
+/// Post.status — the Post state machine (§5.3).
+enum PostStatus {
+  pending
+  active
+  closed
+  rejected
+
+  @@map("post_status")
+}
+
+/// Post.contact_method — how the author prefers to be reached off-platform.
+enum ContactMethod {
+  phone
+  whatsapp
+  email
+
+  @@map("contact_method")
+}
+
+/// ModerationAction.action — moderator decisions (§5.1, Q14: `remove` is a
+/// distinct action from `reject` for audit clarity).
+enum ModerationActionType {
+  approve
+  reject
+  remove
+
+  @@map("moderation_action_type")
+}
+
+/// ConsentRecord.scope — GDPR/LGPD consent scopes (§7.5, BR06).
+enum ConsentScope {
+  terms
+  privacy
+  marketing
+
+  @@map("consent_scope")
+}
+
+/// Notification.type — the event that generated the notification (§6.1–6.3).
+enum NotificationType {
+  interest_received
+  post_approved
+  post_rejected
+  post_closed
+
+  @@map("notification_type")
+}
+
+/// Notification.channel — WhatsApp is link-out only, never a Notification
+/// channel in the MVP (§4.5, §5.1).
+enum NotificationChannel {
+  email
+  in_app
+
+  @@map("notification_channel")
+}
+
+/// Notification.status — delivery lifecycle for the worker process (§3.1).
+enum NotificationStatus {
+  queued
+  sent
+  failed
+
+  @@map("notification_status")
+}
+
+// ---------------------------------------------------------------------
+// Entities (§5.1)
+// ---------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String    @unique @db.Citext
+  passwordHash String    @map("password_hash")
+  displayName  String    @map("display_name")
+  phoneE164    String?   @map("phone_e164")
+  role         Role      @default(user)
+  locale       String    @default("pt-PT")
+  consentAt    DateTime? @map("consent_at") @db.Timestamptz()
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  posts             Post[]             @relation("PostAuthor")
+  interests         Interest[]
+  moderationActions ModerationAction[]
+  consentRecords    ConsentRecord[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  apiKeysCreated    ApiKey[]
+
+  @@map("users")
+}
+
+model Category {
+  id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug String @unique
+  key  String
+
+  posts Post[]
+
+  @@map("categories")
+}
+
+model Post {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId        String                   @map("author_id") @db.Uuid
+  categoryId      String                   @map("category_id") @db.Uuid
+  type            PostType
+  status          PostStatus               @default(pending)
+  title           String
+  description     String
+  contactMethod   ContactMethod            @map("contact_method")
+  /// Encrypted at the application layer (libsodium crypto_secretbox, §7.4).
+  /// Never store or read plaintext contact info through Prisma directly.
+  contactValue    Bytes                    @map("contact_value")
+  locale          String
+  extraAttributes Json                     @default("{}") @map("extra_attributes")
+  publishedAt     DateTime?                @map("published_at") @db.Timestamptz()
+  closedAt        DateTime?                @map("closed_at") @db.Timestamptz()
+  rejectedReason  String?                  @map("rejected_reason")
+  /// Generated column (`to_tsvector(locale, title || ' ' || description)`) —
+  /// created via raw SQL in the migration, not managed by Prisma Client.
+  searchVector    Unsupported("tsvector")? @map("search_vector")
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime                 @updatedAt @map("updated_at") @db.Timestamptz()
+
+  author            User               @relation("PostAuthor", fields: [authorId], references: [id])
+  category          Category           @relation(fields: [categoryId], references: [id])
+  interests         Interest[]
+  moderationActions ModerationAction[]
+  notifications     Notification[]
+
+  // Shop-window listing filter (§5.1).
+  @@index([status, categoryId, type])
+  // Full-text search (GIN on search_vector) and the pg_trgm trigram index
+  // over (title, description) for keyword search (§5.1, FR07) are created
+  // via raw SQL in the migration, alongside the generated `search_vector`
+  // column — Prisma does not support generated columns or trigram operator
+  // classes declaratively.
+  @@map("posts")
+}
+
+model Interest {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  message   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  post Post @relation(fields: [postId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  // One interest per user per post (§5.1).
+  @@unique([postId, userId])
+  @@map("interests")
+}
+
+model ModerationAction {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  postId      String               @map("post_id") @db.Uuid
+  moderatorId String               @map("moderator_id") @db.Uuid
+  action      ModerationActionType
+  /// Required on `reject` — enforced in the service layer, not the DB.
+  reason      String?
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+
+  post      Post @relation(fields: [postId], references: [id])
+  moderator User @relation(fields: [moderatorId], references: [id])
+
+  @@map("moderation_actions")
+}
+
+model ConsentRecord {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  scope       ConsentScope
+  version     String
+  grantedAt   DateTime     @map("granted_at") @db.Timestamptz()
+  withdrawnAt DateTime?    @map("withdrawn_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("consent_records")
+}
+
+model Notification {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipientId String              @map("recipient_id") @db.Uuid
+  postId      String?             @map("post_id") @db.Uuid
+  type        NotificationType
+  payload     Json
+  channel     NotificationChannel
+  status      NotificationStatus  @default(queued)
+  attempts    Int                 @default(0)
+  lastError   String?             @map("last_error")
+  sentAt      DateTime?           @map("sent_at") @db.Timestamptz()
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  recipient User  @relation(fields: [recipientId], references: [id])
+  post      Post? @relation(fields: [postId], references: [id])
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId       String?              @map("actor_id") @db.Uuid
+  actorApiKeyId String?              @map("actor_api_key_id") @db.Uuid
+  action        String
+  targetType    String               @map("target_type")
+  targetId      String?              @map("target_id") @db.Uuid
+  before        Json?
+  after         Json?
+  /// Postgres native `inet` type — Prisma has no first-class mapping.
+  ip            Unsupported("inet")?
+  userAgent     String?              @map("user_agent")
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+
+  actor  User?   @relation(fields: [actorId], references: [id])
+  apiKey ApiKey? @relation(fields: [actorApiKeyId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model ApiKey {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  /// argon2id hash of the bearer token; raw token shown once at creation.
+  hashedToken String     @unique @map("hashed_token")
+  prefix      String
+  role        ApiKeyRole @default(service)
+  scopes      String[]   @default([])
+  createdById String     @map("created_by") @db.Uuid
+  lastUsedAt  DateTime?  @map("last_used_at") @db.Timestamptz()
+  revokedAt   DateTime?  @map("revoked_at") @db.Timestamptz()
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+
+  createdBy User       @relation(fields: [createdById], references: [id])
+  auditLogs AuditLog[]
+
+  @@map("api_keys")
+}
