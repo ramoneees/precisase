@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens translated from the Claude Design prototype
+ * (`Precisa-se.dc.html`) — see also src/lib/design-tokens.ts for the
+ * TypeScript-side equivalents used where a raw hex value is needed at
+ * runtime (e.g. the placeholder photo SVG). Kept centralized here so the
+ * create-post-form and moderation-queue views built on top of this layout
+ * stay visually consistent.
+ */
+:root {
+  --color-bg: #f7f4ee;
+  --color-fg: #232922;
+  --color-border: #e3ded2;
+  --color-muted: #6b7268;
+  --color-muted-2: #9aa098;
+  --color-card: #ffffff;
+
+  /* Brand primary (muted green) / secondary-accent (warm terracotta). */
+  --color-primary: #2f6b4f;
+  --color-primary-tint: #e6f0ea;
+  --color-accent: #c4622d;
+  --color-accent-tint: #fbebe0;
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-fg);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-nunito);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+}
