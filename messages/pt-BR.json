@@ -1,11 +1,18 @@
 {
-  "nav": {
+"nav": {
     "brand": "Precisa-se",
     "home": "Início",
     "publish": "Publicar",
-    "myPosts": "Meus posts",
+    "myPosts": "Minhas publicações",
     "moderation": "Moderação",
-    "signIn": "Entrar"
+    "signIn": "Entrar",
+    "myAccount": "Minha conta",
+    "languageLabel": "Idioma",
+    "languageOptions": {
+      "pt-PT": "Português (PT)",
+      "pt-BR": "Português (BR)",
+      "en": "Inglês"
+    }
   },
   "listing": {
     "title": "A vitrine da comunidade",
@@ -19,6 +26,7 @@
       "offers": "Ofertas"
     },
     "resultsCount": "{count, plural, one {# post ativo} other {# posts ativos}}",
+    "loadMore": "Ver mais",
     "empty": {
       "title": "Sem resultados",
       "description": "Tente outra pesquisa ou remova os filtros."
@@ -102,15 +110,41 @@
     "heading": "Meus posts",
     "empty": "Você ainda não publicou nenhum pedido ou oferta.",
     "interestCount": "{count, plural, =0 {Sem interesses ainda} one {# pessoa interessada} other {# pessoas interessadas}}",
+    "rejectedReasonLabel": "Motivo da rejeição:",
     "actions": {
       "markResolved": "Marcar como resolvido",
       "reopen": "Reabrir",
-      "view": "Ver"
+      "view": "Ver",
+      "editAndResubmit": "Editar e reenviar"
     },
     "toastClosed": "Post marcado como resolvido.",
     "toastReopened": "Post reaberto.",
     "errors": {
       "generic": "Não foi possível concluir a ação. Tente novamente."
+    },
+    "edit": {
+      "heading": "Editar e reenviar post",
+      "subtitle": "Corrija o que for necessário e reenvie para aprovação de um moderador.",
+      "rejectedReasonLabel": "Motivo da rejeição:",
+      "typeLabel": "Tipo",
+      "typeOptions": {
+        "request": "Pedido (preciso de algo)",
+        "offer": "Oferta (posso ajudar)"
+      },
+      "categoryLabel": "Categoria",
+      "titleLabel": "Título",
+      "descriptionLabel": "Descrição",
+      "contactMethodLabel": "Contato preferido",
+      "contactValueLabel": "Contato",
+      "submit": "Reenviar para aprovação",
+      "submitting": "Reenviando…",
+      "toastSuccess": "Post reenviado para aprovação.",
+      "errors": {
+        "invalidInput": "Verifique os dados informados e tente novamente.",
+        "unauthorized": "Você não tem permissão para editar este post.",
+        "invalidTransition": "Este post não pode mais ser reenviado.",
+        "generic": "Não foi possível reenviar o post. Tente novamente."
+      }
     }
   },
   "moderation": {
@@ -145,7 +179,8 @@
       "emailLabel": "Email",
       "passwordLabel": "Senha",
       "confirmPasswordLabel": "Confirmar senha",
-      "consentLabel": "Aceito os Termos e a Política de Privacidade",
+      "consentLabel": "Aceito os Termos e a",
+      "consentPrivacyLinkLabel": "Política de Privacidade",
       "submit": "Criar conta",
       "submitting": "Criando conta…",
       "haveAccount": "Já tem conta?",
@@ -174,6 +209,105 @@
         "invalidCredentials": "Email ou senha incorretos.",
         "generic": "Não foi possível entrar. Tente novamente."
       }
+    }
+  },
+  "profile": {
+    "heading": "Minha conta",
+    "subtitle": "Veja e atualize seus dados pessoais.",
+    "emailLabel": "Email",
+    "emailImmutableHint": "O email é seu identificador de login e não pode ser alterado aqui.",
+    "roleLabel": "Função",
+    "roleValues": {
+      "user": "Membro",
+      "moderator": "Moderador",
+      "admin": "Administrador"
+    },
+    "localeLabel": "Idioma",
+    "displayNameLabel": "Nome",
+    "phoneLabel": "Telefone",
+    "phonePlaceholder": "912 345 678",
+    "phoneCountryLabel": "País",
+    "churchAffiliationLabel": "Comunidade / igreja (opcional)",
+    "churchAffiliationPlaceholder": "Ex: Casa da Cidade — Núcleo Norte",
+    "save": "Salvar alterações",
+    "saving": "Salvando…",
+    "toastSaved": "Perfil atualizado.",
+    "errors": {
+      "invalidInput": "O nome não pode ficar vazio.",
+      "unauthenticated": "Você precisa entrar para editar seu perfil.",
+      "invalidPhone": "Digite um número de telefone válido para o país selecionado.",
+      "generic": "Não foi possível salvar as alterações. Tente novamente."
+    },
+    "dangerZone": {
+      "heading": "Excluir minha conta",
+      "explanation": "Ao excluir sua conta, seu nome, email, telefone e afiliação são anonimizados imediatamente e a conta deixa de poder ser usada para entrar na plataforma — mas isso não significa remoção instantânea de todos os sistemas (por exemplo, backups recentes podem manter dados por mais algum tempo). Os posts que você publicou permanecem visíveis, mas deixam de estar associados à sua identidade. Esta ação não pode ser desfeita.",
+      "privacyLinkLabel": "Consulte a política de privacidade para mais detalhes.",
+      "passwordLabel": "Confirme sua senha atual",
+      "passwordPlaceholder": "Sua senha",
+      "confirm": "Excluir minha conta",
+      "confirming": "Excluindo…",
+      "toastDeleted": "Sua conta foi excluída.",
+      "errors": {
+        "invalidPassword": "Senha incorreta.",
+        "unauthenticated": "Você precisa entrar para excluir sua conta.",
+        "generic": "Não foi possível excluir a conta. Tente novamente."
+      }
+    }
+  },
+  "privacy": {
+    "title": "Política de Privacidade",
+    "heading": "Política de Privacidade",
+    "updatedAt": "Última atualização: 18 de julho de 2026.",
+    "legalNotice": "Nota: este texto é uma primeira versão redigida para o lançamento do MVP e ainda não foi revisada por um advogado. Antes do lançamento público, deve ser validada pela direção da Casa da Cidade e, idealmente, por assessoria jurídica.",
+    "intro": "Esta página explica, em linguagem simples, quais dados a plataforma Precisa-se coleta, por que os coleta, e quais direitos você tem sobre eles.",
+    "sections": {
+      "whatWeCollect": {
+        "heading": "Quais dados coletamos",
+        "body": "Quando você cria uma conta, guardamos seu nome, email, senha (nunca em texto simples — é sempre criptografada) e, se você quiser compartilhar, seu telefone e sua comunidade ou igreja de afiliação. Quando você publica um pedido ou uma oferta, guardamos o título, a descrição, a categoria e o contato que você escolher compartilhar (telefone, WhatsApp ou email)."
+      },
+      "why": {
+        "heading": "Por que coletamos esses dados",
+        "body": "Usamos esses dados exclusivamente para conectar pedidos e ofertas dentro da comunidade da Casa da Cidade — por exemplo, para que alguém interessado no seu pedido de voluntariado consiga entrar em contato com você. Não usamos seus dados para publicidade nem para qualquer outra finalidade."
+      },
+      "protection": {
+        "heading": "Como protegemos seu contato",
+        "body": "O contato associado a um post (telefone, WhatsApp ou email) é criptografado antes de ser guardado no banco de dados — mesmo que alguém tivesse acesso direto ao banco de dados, não conseguiria ler seu contato sem a chave de criptografia, guardada separadamente. As senhas são protegidas com um algoritmo de referência (argon2id), nunca guardadas em texto simples."
+      },
+      "sharing": {
+        "heading": "Compartilhamento com terceiros",
+        "body": "Não vendemos nem compartilhamos seus dados com terceiros para fins comerciais. Seu contato só é revelado a outro usuário quando ele manifesta interesse explícito em um dos seus posts — e é revelado apenas a essa pessoa, nunca publicamente."
+      },
+      "retention": {
+        "heading": "Por quanto tempo guardamos seus dados",
+        "body": "Guardamos seus dados enquanto sua conta estiver ativa. Registros de auditoria (por exemplo, o registro de que você pediu a exclusão da sua conta) são mantidos por um período limitado após a exclusão, por razões de responsabilização — atualmente previsto em 12 meses, um valor que pode ser ajustado com assessoria jurídica."
+      },
+      "deletion": {
+        "heading": "Seu direito de apagar seus dados",
+        "body": "Você pode pedir a exclusão da sua conta a qualquer momento, na página \"Minha conta\". Ao confirmar com sua senha atual, seu nome, email, telefone e afiliação são anonimizados imediatamente e a conta deixa de poder ser usada para entrar na plataforma. Os posts que você publicou deixam de estar associados à sua identidade, mas podem permanecer visíveis para preservar o histórico da comunidade."
+      },
+      "contact": {
+        "heading": "Dúvidas sobre privacidade",
+        "body": "Se você tiver alguma dúvida sobre esta política ou sobre seus dados, entre em contato com a secretaria da Casa da Cidade. (Nota: este é um contato provisório — antes do lançamento, deve ser substituído por um endereço de email ou responsável de privacidade real.)"
+      }
+    }
+  },
+  "email": {
+    "postApproved": {
+      "subject": "Seu post \"{title}\" foi aprovado",
+      "body": "Olá {name},\n\nBoas notícias — seu post \"{title}\" foi aprovado por um moderador e já está visível na vitrine da comunidade.\n\nVeja aqui: {link}\n\n— Precisa-se, Casa da Cidade"
+    },
+    "postRejected": {
+      "subject": "Seu post \"{title}\" precisa de alterações",
+      "body": "Olá {name},\n\nSeu post \"{title}\" não foi aprovado por um moderador.\n\nMotivo: {reason}\n\nVocê pode editar e enviar novamente aqui: {link}\n\n— Precisa-se, Casa da Cidade"
+    },
+    "postClosed": {
+      "subject": "Seu post \"{title}\" foi marcado como resolvido",
+      "body": "Olá {name},\n\nSeu post \"{title}\" foi marcado como resolvido.\n\nVeja aqui: {link}\n\n— Precisa-se, Casa da Cidade"
+    },
+    "interestReceived": {
+      "subject": "Alguém está interessado em \"{title}\"",
+      "body": "Olá {name},\n\nAlguém manifestou interesse no seu post \"{title}\".{messageLine}\n\nVeja aqui: {link}\n\n— Precisa-se, Casa da Cidade",
+      "messageLine": "\n\nMensagem: \"{message}\""
     }
   }
 }

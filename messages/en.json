@@ -5,7 +5,14 @@
     "publish": "Post",
     "myPosts": "My posts",
     "moderation": "Moderation",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "myAccount": "My account",
+    "languageLabel": "Language",
+    "languageOptions": {
+      "pt-PT": "Português (PT)",
+      "pt-BR": "Português (BR)",
+      "en": "English"
+    }
   },
   "listing": {
     "title": "The community shop window",
@@ -19,6 +26,7 @@
       "offers": "Offers"
     },
     "resultsCount": "{count, plural, one {# active post} other {# active posts}}",
+    "loadMore": "Load more",
     "empty": {
       "title": "No results",
       "description": "Try a different search or remove filters."
@@ -102,15 +110,41 @@
     "heading": "My posts",
     "empty": "You haven't published any requests or offers yet.",
     "interestCount": "{count, plural, =0 {No interest yet} one {# person interested} other {# people interested}}",
+    "rejectedReasonLabel": "Rejection reason:",
     "actions": {
       "markResolved": "Mark as resolved",
       "reopen": "Reopen",
-      "view": "View"
+      "view": "View",
+      "editAndResubmit": "Edit and resubmit"
     },
     "toastClosed": "Post marked as resolved.",
     "toastReopened": "Post reopened.",
     "errors": {
       "generic": "Could not complete the action. Please try again."
+    },
+    "edit": {
+      "heading": "Edit and resubmit post",
+      "subtitle": "Fix whatever needs fixing and resubmit it for a moderator's approval.",
+      "rejectedReasonLabel": "Rejection reason:",
+      "typeLabel": "Type",
+      "typeOptions": {
+        "request": "Request (I need something)",
+        "offer": "Offer (I can help)"
+      },
+      "categoryLabel": "Category",
+      "titleLabel": "Title",
+      "descriptionLabel": "Description",
+      "contactMethodLabel": "Preferred contact",
+      "contactValueLabel": "Contact",
+      "submit": "Resubmit for approval",
+      "submitting": "Resubmitting…",
+      "toastSuccess": "Post resubmitted for approval.",
+      "errors": {
+        "invalidInput": "Please check the fields and try again.",
+        "unauthorized": "You don't have permission to edit this post.",
+        "invalidTransition": "This post can no longer be resubmitted.",
+        "generic": "Could not resubmit the post. Please try again."
+      }
     }
   },
   "moderation": {
@@ -145,7 +179,8 @@
       "emailLabel": "Email",
       "passwordLabel": "Password",
       "confirmPasswordLabel": "Confirm password",
-      "consentLabel": "I accept the Terms and the Privacy Policy",
+      "consentLabel": "I accept the Terms and the",
+      "consentPrivacyLinkLabel": "Privacy Policy",
       "submit": "Create account",
       "submitting": "Creating account…",
       "haveAccount": "Already have an account?",
@@ -174,6 +209,105 @@
         "invalidCredentials": "Incorrect email or password.",
         "generic": "Could not sign in. Please try again."
       }
+    }
+  },
+  "profile": {
+    "heading": "My account",
+    "subtitle": "View and update your personal details.",
+    "emailLabel": "Email",
+    "emailImmutableHint": "Email is your login identifier and cannot be changed here.",
+    "roleLabel": "Role",
+    "roleValues": {
+      "user": "Member",
+      "moderator": "Moderator",
+      "admin": "Administrator"
+    },
+    "localeLabel": "Language",
+    "displayNameLabel": "Name",
+    "phoneLabel": "Phone",
+    "phonePlaceholder": "912 345 678",
+    "phoneCountryLabel": "Country",
+    "churchAffiliationLabel": "Community / church (optional)",
+    "churchAffiliationPlaceholder": "E.g. Casa da Cidade — North Hub",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "toastSaved": "Profile updated.",
+    "errors": {
+      "invalidInput": "Name cannot be empty.",
+      "unauthenticated": "You need to sign in to edit your profile.",
+      "invalidPhone": "Please enter a valid phone number for the selected country.",
+      "generic": "Could not save the changes. Please try again."
+    },
+    "dangerZone": {
+      "heading": "Delete my account",
+      "explanation": "Deleting your account immediately anonymizes your name, email, phone, and affiliation, and the account can no longer be used to sign in — though this doesn't mean instant removal from every system (for example, recent backups may retain data for a while longer). Posts you published remain visible, but are no longer linked to your identity. This action cannot be undone.",
+      "privacyLinkLabel": "See the privacy policy for more details.",
+      "passwordLabel": "Confirm your current password",
+      "passwordPlaceholder": "Your password",
+      "confirm": "Delete my account",
+      "confirming": "Deleting…",
+      "toastDeleted": "Your account has been deleted.",
+      "errors": {
+        "invalidPassword": "Incorrect password.",
+        "unauthenticated": "You need to sign in to delete your account.",
+        "generic": "Could not delete the account. Please try again."
+      }
+    }
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "heading": "Privacy Policy",
+    "updatedAt": "Last updated: July 18, 2026.",
+    "legalNotice": "Note: this text is a first draft written for the MVP launch and has not yet been reviewed by a lawyer. Before public launch, it should be validated by Casa da Cidade's leadership and, ideally, by legal counsel.",
+    "intro": "This page explains, in plain language, what data the Precisa-se platform collects, why it collects it, and what rights you have over it.",
+    "sections": {
+      "whatWeCollect": {
+        "heading": "What data we collect",
+        "body": "When you create an account, we store your name, email, password (never in plain text — it is always encrypted) and, if you choose to share it, your phone number and your community or church affiliation. When you publish a request or an offer, we store the title, description, category, and the contact you choose to share (phone, WhatsApp, or email)."
+      },
+      "why": {
+        "heading": "Why we collect this data",
+        "body": "We use this data exclusively to connect requests and offers within the Casa da Cidade community — for example, so someone interested in your volunteering request can reach you. We do not use your data for advertising or any other purpose."
+      },
+      "protection": {
+        "heading": "How we protect your contact details",
+        "body": "The contact details attached to a post (phone, WhatsApp, or email) are encrypted before being stored in the database — even if someone had direct access to the database, they could not read your contact without the separately stored encryption key. Passwords are protected with an industry-standard algorithm (argon2id), never stored in plain text."
+      },
+      "sharing": {
+        "heading": "Sharing with third parties",
+        "body": "We do not sell or share your data with third parties for commercial purposes. Your contact is only revealed to another user when they express explicit interest in one of your posts — and only to that person, never publicly."
+      },
+      "retention": {
+        "heading": "How long we keep your data",
+        "body": "We keep your data for as long as your account is active. Audit records (for example, the record that you requested account deletion) are kept for a limited period after deletion for accountability reasons — currently planned at 12 months, a figure that may be adjusted with legal advice."
+      },
+      "deletion": {
+        "heading": "Your right to delete your data",
+        "body": "You can request deletion of your account at any time from the \"My account\" page. When you confirm with your current password, your name, email, phone, and affiliation are immediately anonymized and the account can no longer be used to sign in. Posts you published are no longer linked to your identity, but may remain visible to preserve the community's history."
+      },
+      "contact": {
+        "heading": "Privacy questions",
+        "body": "If you have any questions about this policy or your data, contact the Casa da Cidade office. (Note: this is a placeholder contact point — before launch, it should be replaced with a real email address or privacy contact.)"
+      }
+    }
+  },
+  "email": {
+    "postApproved": {
+      "subject": "Your post \"{title}\" was approved",
+      "body": "Hi {name},\n\nGood news — your post \"{title}\" has been approved by a moderator and is now visible in the community shop window.\n\nView it here: {link}\n\n— Precisa-se, Casa da Cidade"
+    },
+    "postRejected": {
+      "subject": "Your post \"{title}\" needs changes",
+      "body": "Hi {name},\n\nYour post \"{title}\" was not approved by a moderator.\n\nReason: {reason}\n\nYou can edit it and submit it again here: {link}\n\n— Precisa-se, Casa da Cidade"
+    },
+    "postClosed": {
+      "subject": "Your post \"{title}\" was marked as resolved",
+      "body": "Hi {name},\n\nYour post \"{title}\" has been marked as resolved.\n\nView it here: {link}\n\n— Precisa-se, Casa da Cidade"
+    },
+    "interestReceived": {
+      "subject": "Someone is interested in \"{title}\"",
+      "body": "Hi {name},\n\nSomeone has expressed interest in your post \"{title}\".{messageLine}\n\nView it here: {link}\n\n— Precisa-se, Casa da Cidade",
+      "messageLine": "\n\nTheir message: \"{message}\""
     }
   }
 }

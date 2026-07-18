@@ -1,0 +1,13 @@
+# Local-dev-only convenience override — Docker Compose auto-merges this
+# with docker-compose.yml when present (no -f flag needed). Not used by
+# docker-compose.staging.yml / docker-compose.prod.yml (§8.2 overlays are
+# invoked explicitly with their own -f, so this file never applies there).
+#
+# Publishes `db` to 127.0.0.1 ONLY, so a host-run `pnpm dev` can reach
+# Postgres — the base docker-compose.yml deliberately publishes no ports
+# (§7.3: db/redis are internal-network-only). This does not weaken that
+# posture for staging/prod, which never load this file.
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"

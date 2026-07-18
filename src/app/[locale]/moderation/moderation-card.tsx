@@ -6,6 +6,8 @@ import { useRouter } from "@/i18n/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { TypeBadge, CategoryBadge } from "@/components/posts/badges";
 import { colors } from "@/lib/design-tokens";
+import { formatDateTime } from "@/lib/format";
+import { defaultTimeZoneForUiLocale } from "@/lib/region-defaults";
 import { approvePostAction, rejectPostAction } from "./actions";
 import type { PostTypeValue } from "@/server/services/post-service";
 
@@ -43,11 +45,10 @@ export function ModerationCard({
   const [reason, setReason] = useState("");
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
-  const formattedDate = new Intl.DateTimeFormat(locale, {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(post.createdAt);
+  const formattedDate = formatDateTime(post.createdAt, {
+    locale,
+    timeZone: defaultTimeZoneForUiLocale(locale),
+  });
 
   const canConfirmReject = reason.trim().length > 0;
 

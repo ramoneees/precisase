@@ -63,7 +63,11 @@ describe("SignupForm validation (docs/ARCHITECTURE.md §7.5, BR06)", () => {
       screen.getByLabelText(ptPT.auth.signUp.confirmPasswordLabel),
       "different-password",
     );
-    await user.click(screen.getByLabelText(ptPT.auth.signUp.consentLabel));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: `${ptPT.auth.signUp.consentLabel} ${ptPT.auth.signUp.consentPrivacyLinkLabel}`,
+      }),
+    );
     await user.click(
       screen.getByRole("button", { name: ptPT.auth.signUp.submit }),
     );
@@ -126,7 +130,11 @@ describe("SignupForm validation (docs/ARCHITECTURE.md §7.5, BR06)", () => {
       screen.getByLabelText(ptPT.auth.signUp.confirmPasswordLabel),
       "correct-password",
     );
-    await user.click(screen.getByLabelText(ptPT.auth.signUp.consentLabel));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: `${ptPT.auth.signUp.consentLabel} ${ptPT.auth.signUp.consentPrivacyLinkLabel}`,
+      }),
+    );
     await user.click(
       screen.getByRole("button", { name: ptPT.auth.signUp.submit }),
     );

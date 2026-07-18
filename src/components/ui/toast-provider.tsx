@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 /**
  * Minimal global toast mechanism (design prototype: a dark pill, fixed
@@ -31,6 +38,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     timeoutRef.current = setTimeout(() => {
       setMessage(null);
     }, AUTO_DISMISS_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, []);
 
   return (

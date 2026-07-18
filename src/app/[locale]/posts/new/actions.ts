@@ -8,6 +8,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { getLocale } from "next-intl/server";
 import { auth } from "@/auth";
 import { postService } from "@/server/service-instances";
 import { findCategoryBySlug } from "@/server/categories";
@@ -16,7 +17,6 @@ import {
   type ContactMethodValue,
   type PostTypeValue,
 } from "@/server/services/post-service";
-import { routing, type AppLocale } from "@/i18n/routing";
 
 export type CreatePostErrorCode =
   | "unauthenticated"
@@ -38,11 +38,6 @@ export interface CreatePostInput {
   consent: boolean;
   /** Relative URLs already uploaded via `/api/uploads` (up to 4). */
   photos: string[];
-  locale: string;
-}
-
-function isSupportedLocale(locale: string): locale is AppLocale {
-  return (routing.locales as readonly string[]).includes(locale);
 }
 
 export async function createPostAction(
@@ -56,7 +51,13 @@ export async function createPostAction(
   const title = input.title?.trim() ?? "";
   const description = input.description?.trim() ?? "";
   const contactValue = input.contactValue?.trim() ?? "";
-  const locale = isSupportedLocale(input.locale) ? input.locale : routing.defaultLocale;
+
+  // Content locale for the post (used by FTS — see posts_search_config in
+  // prisma/migrations/20260718181500_post_search_indexes/migration.sql).
+  // Pulled from the request context (next-intl middleware-resolved locale
+  // — cookie > Accept-Language > defaultLocale) rather than from the
+  // form input, since the form no longer threads locale through.
+  const locale = await getLocale();
 
   if (!title || !description || !contactValue) {
     return { ok: false, error: "invalidInput" };
@@ -88,7 +89,7 @@ export async function createPostAction(
       extraAttributes: photos.length > 0 ? { photos } : {},
     });
 
-    revalidatePath(`/${locale}/my-posts`);
+    revalidatePath(`/my-posts`);
 
     return { ok: true, postId: post.id };
   } catch (error) {

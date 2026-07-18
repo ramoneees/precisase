@@ -118,17 +118,43 @@ enum NotificationStatus {
 // ---------------------------------------------------------------------
 
 model User {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email        String    @unique @db.Citext
-  passwordHash String    @map("password_hash")
-  displayName  String    @map("display_name")
-  phoneE164    String?   @map("phone_e164")
-  role         Role      @default(user)
-  locale       String    @default("pt-PT")
-  consentAt    DateTime? @map("consent_at") @db.Timestamptz()
-  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz()
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email             String    @unique @db.Citext
+  passwordHash      String    @map("password_hash")
+  displayName       String    @map("display_name")
+  phoneE164         String?   @map("phone_e164")
+  /// Optional community/church affiliation (FR13 — "Name, contact info,
+  /// optional community/church affiliation"). Free-text, not a FK to any
+  /// congregation table — the MVP has no multi-church model.
+  churchAffiliation String?   @map("church_affiliation")
+  role              Role      @default(user)
+  /// UI translation catalog the user prefers (`pt-PT`, `en`, `pt-BR`).
+  /// Independent of `country`/`timeZone`/`currency` — a Brazilian expat in
+  /// Lisbon may want `pt-BR` UI with `PT` region defaults. Renamed from
+  /// `locale` in the 2026-07-18 i18n-beyond-language migration; the URL
+  /// segment keeps its single-locale form.
+  uiLocale          String    @default("pt-PT") @map("ui_locale")
+  /// ISO 3166-1 alpha-2 country code (`PT`, `BR`, `US`, …). Drives
+  /// currency/phone-country-code/address-format defaults. Nullable until
+  /// the user picks one or it's derived from `uiLocale`'s region subtag.
+  country           String?   @db.Char(2)
+  /// IANA time zone identifier (`Europe/Lisbon`, `America/Sao_Paulo`, …).
+  /// Drives date/time display in shop window, post detail, moderation
+  /// queue, and notification emails. Nullable; falls back to the URL
+  /// locale's default time zone at render time.
+  timeZone          String?   @map("time_zone")
+  /// ISO 4217 alpha-3 currency code (`EUR`, `BRL`, `USD`, …). Derived from
+  /// `country` by default; user-overridable. Unused in MVP (BR07 — no
+  /// payments); reserved for phase-2 job posts.
+  currency          String?   @db.Char(3)
+  /// `metric` or `us`. Null means "derive from `country`". Unused in MVP
+  /// (no structured quantity fields); reserved for future donation-quantity
+  /// features.
+  measurementSystem String?   @map("measurement_system")
+  consentAt         DateTime? @map("consent_at") @db.Timestamptz()
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
   posts             Post[]             @relation("PostAuthor")
   interests         Interest[]
@@ -182,6 +208,9 @@ model Post {
 
   // Shop-window listing filter (§5.1).
   @@index([status, categoryId, type])
+  // My-posts view (`listByAuthor`) filters on authorId; createdAt backs
+  // the `orderBy desc` in the same query — combined index serves both.
+  @@index([authorId, createdAt])
   // Full-text search (GIN on search_vector) and the pg_trgm trigram index
   // over (title, description) for keyword search (§5.1, FR07) are created
   // via raw SQL in the migration, alongside the generated `search_vector`
@@ -202,6 +231,11 @@ model Interest {
 
   // One interest per user per post (§5.1).
   @@unique([postId, userId])
+  // GDPR/LGPD account deletion deletes all of a user's Interest rows by
+  // `userId` — the composite PK above is `(postId, userId)` and doesn't
+  // help a `WHERE user_id = ?` lookup, so without this index that delete
+  // is a seq scan over an unbounded table.
+  @@index([userId])
   @@map("interests")
 }
 
@@ -230,6 +264,10 @@ model ConsentRecord {
 
   user User @relation(fields: [userId], references: [id])
 
+  // Account-deletion bulk-withdraw (`updateMany WHERE userId AND withdrawnAt IS NULL`)
+  // — without this index that's a seq scan over every consent row for every
+  // user every time anyone self-deletes.
+  @@index([userId, withdrawnAt])
   @@map("consent_records")
 }
 
@@ -245,10 +283,12 @@ model Notification {
   lastError   String?             @map("last_error")
   sentAt      DateTime?           @map("sent_at") @db.Timestamptz()
   createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
 
   recipient User  @relation(fields: [recipientId], references: [id])
   post      Post? @relation(fields: [postId], references: [id])
 
+  @@index([status, channel, createdAt])
   @@map("notifications")
 }
 
@@ -269,6 +309,10 @@ model AuditLog {
   actor  User?   @relation(fields: [actorId], references: [id])
   apiKey ApiKey? @relation(fields: [actorApiKeyId], references: [id])
 
+  // Audit review queries typically filter by `actorId` over a 12-month
+  // retention window (§7.6, Q8) — without this index those queries are a
+  // seq scan over a fast-growing table.
+  @@index([actorId, createdAt])
   @@map("audit_logs")
 }
 

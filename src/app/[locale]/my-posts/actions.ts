@@ -53,6 +53,7 @@ export async function closeMyPostAction(
 
   const resolvedLocale = isSupportedLocale(locale) ? locale : routing.defaultLocale;
   revalidatePath(`/${resolvedLocale}/my-posts`);
+  revalidatePath("/", "page");
 
   return { ok: true };
 }
@@ -77,6 +78,7 @@ export async function reopenMyPostAction(
 
   const resolvedLocale = isSupportedLocale(locale) ? locale : routing.defaultLocale;
   revalidatePath(`/${resolvedLocale}/my-posts`);
+  revalidatePath("/", "page");
 
   return { ok: true };
 }

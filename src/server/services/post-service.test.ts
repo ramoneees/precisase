@@ -11,8 +11,10 @@ import {
   type AuditLogRecord,
   type ModerationActionRecord,
   type NotificationRecord,
+  type PaginatedPosts,
   type PostRecord,
   type PostRepository,
+  type PostSummary,
 } from "./post-service";
 
 /**
@@ -67,32 +69,48 @@ class InMemoryPostRepository implements PostRepository {
     return post;
   }
 
-  async listActive(filter: { categoryId?: string; type?: PostRecord["type"]; search?: string }): Promise<PostRecord[]> {
-    return [...this.posts.values()].filter((post) => {
-      if (post.status !== "active") return false;
-      if (filter.categoryId && post.categoryId !== filter.categoryId) return false;
-      if (filter.type && post.type !== filter.type) return false;
-      if (filter.search) {
+  async listActive(filter: {
+    categoryId?: string;
+    type?: PostRecord["type"];
+    search?: string;
+    after?: string;
+    limit?: number;
+  }): Promise<PaginatedPosts> {
+    const limit = filter.limit ?? 24;
+    const cursorPost = filter.after ? this.posts.get(filter.after) : undefined;
+    const cursorDate = cursorPost?.createdAt;
+
+    const filtered = [...this.posts.values()]
+      .filter((post) => post.status === "active")
+      .filter((post) => (filter.categoryId ? post.categoryId === filter.categoryId : true))
+      .filter((post) => (filter.type ? post.type === filter.type : true))
+      .filter((post) => {
+        if (!filter.search) return true;
         const haystack = `${post.title} ${post.description}`.toLowerCase();
-        if (!haystack.includes(filter.search.toLowerCase())) return false;
-      }
-      return true;
-    });
+        return haystack.includes(filter.search.toLowerCase());
+      })
+      .filter((post) => (cursorDate ? post.createdAt.getTime() < cursorDate.getTime() : true))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map(toSummary);
+
+    return paginateForTest(filtered, limit);
   }
 
-  async listPending(): Promise<PostRecord[]> {
+  async listPending(): Promise<PostSummary[]> {
     return [...this.posts.values()]
       .filter((post) => post.status === "pending")
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map(toSummary);
   }
 
   listByAuthorCalls: string[] = [];
 
-  async listByAuthor(authorId: string): Promise<PostRecord[]> {
+  async listByAuthor(authorId: string): Promise<PostSummary[]> {
     this.listByAuthorCalls.push(authorId);
     return [...this.posts.values()]
       .filter((post) => post.authorId === authorId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map(toSummary);
   }
 
   async addModerationAction(action: ModerationActionRecord): Promise<void> {
@@ -106,6 +124,20 @@ class InMemoryPostRepository implements PostRepository {
   async addAuditLog(log: AuditLogRecord): Promise<void> {
     this.auditLogs.push(log);
   }
+}
+
+function toSummary(post: PostRecord): PostSummary {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { contactMethod, contactValue, ...summary } = post;
+  return summary;
+}
+
+function paginateForTest(rows: PostSummary[], limit: number): PaginatedPosts {
+  if (rows.length <= limit) {
+    return { items: rows, nextCursor: null };
+  }
+  const page = rows.slice(0, limit);
+  return { items: page, nextCursor: page[page.length - 1]!.id };
 }
 
 function makePost(overrides: Partial<PostRecord> = {}): PostRecord {
@@ -362,6 +394,39 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
         }),
       ).rejects.toThrow(InvalidPostTransitionError);
     });
+
+    it("lets the author also correct the contact method/value when resubmitting (a post may have been rejected for bad contact info)", async () => {
+      repo.seed(
+        makePost({
+          status: "rejected",
+          rejectedReason: "Contact number is invalid.",
+          contactMethod: "phone",
+          contactValue: "000",
+        }),
+      );
+
+      const result = await service.resubmitPost({
+        postId: "post-1",
+        actor: actor("author-1", "user"),
+        updates: { contactMethod: "whatsapp", contactValue: "+351 912 345 678" },
+      });
+
+      expect(result.status).toBe("pending");
+      expect(result.contactMethod).toBe("whatsapp");
+      expect(result.contactValue).toBe("+351 912 345 678");
+    });
+
+    it("rejects resubmitting with an empty contact value (BR04)", async () => {
+      repo.seed(makePost({ status: "rejected" }));
+
+      await expect(
+        service.resubmitPost({
+          postId: "post-1",
+          actor: actor("author-1", "user"),
+          updates: { contactValue: "   " },
+        }),
+      ).rejects.toThrow(ContactInfoRequiredError);
+    });
   });
 
   describe("createPost — [*] -> pending (FR01, BR01)", () => {
@@ -498,7 +563,8 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
 
       const result = await service.listActivePosts({ categoryId: "category-1" });
 
-      expect(result.map((p) => p.id)).toEqual(["post-1"]);
+      expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
+      expect(result.nextCursor).toBeNull();
     });
 
     it("passes filter (category, type, search) through to the repository", async () => {
@@ -515,7 +581,31 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
 
       const result = await service.listActivePosts({ type: "offer", categoryId: "category-2" });
 
-      expect(result.map((p) => p.id)).toEqual(["post-1"]);
+      expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
+    });
+
+    it("paginates: returns nextCursor when more rows exist past `limit`", async () => {
+      for (let i = 0; i < 5; i++) {
+        repo.seed(
+          makePost({
+            id: `post-${i + 1}`,
+            status: "active",
+            createdAt: new Date(Date.UTC(2026, 0, i + 1)),
+          }),
+        );
+      }
+
+      const page1 = await service.listActivePosts({ limit: 2 });
+      expect(page1.items.map((p) => p.id)).toEqual(["post-5", "post-4"]);
+      expect(page1.nextCursor).toBe("post-4");
+
+      const page2 = await service.listActivePosts({ limit: 2, after: page1.nextCursor! });
+      expect(page2.items.map((p) => p.id)).toEqual(["post-3", "post-2"]);
+      expect(page2.nextCursor).toBe("post-2");
+
+      const page3 = await service.listActivePosts({ limit: 2, after: page2.nextCursor! });
+      expect(page3.items.map((p) => p.id)).toEqual(["post-1"]);
+      expect(page3.nextCursor).toBeNull();
     });
   });
 

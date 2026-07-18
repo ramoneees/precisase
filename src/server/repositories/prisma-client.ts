@@ -1,9 +1,9 @@
 /**
- * Prisma client singleton scoped to the Post/Interest/Category repositories
- * (this directory). Kept separate from `src/server/auth/prisma-client.ts`
- * (owned by the parallel Auth.js workstream) so the two workstreams never
- * touch each other's files — both simply instantiate their own client
- * against the same underlying Postgres database.
+ * Prisma client singleton shared by every server-side consumer: the
+ * Post/Interest/Notification/AccountDeletion repositories, the auth
+ * repository (`src/server/auth/user-repository.ts`), and the App Router
+ * pages that read directly off the Prisma client (home / my-posts /
+ * moderation / post detail).
  *
  * Uses the driver-adapter setup required by the `prisma-client` generator
  * (prisma/schema.prisma `generator client` block): `PrismaPg` from
@@ -11,14 +11,21 @@
  *
  * Cached on `globalThis` in development to avoid exhausting Postgres
  * connections across Next.js Fast Refresh module reloads.
+ *
+ * Historical note: this file used to have a sibling at
+ * `src/server/auth/prisma-client.ts` (a byte-identical duplicate cached
+ * under a different `globalThis` key, justified by a "parallel
+ * workstream" comment that no longer applied after merge). Both pools
+ * were independent — i.e. N replicas × 2 pools × M connections each,
+ * which silently multiplied Postgres `max_connections` usage. All
+ * consumers now import from here.
  */
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
 declare global {
-  // eslint-disable-next-line no-var
-  var __postsPrismaClient: PrismaClient | undefined;
+  var __precisasePrismaClient: PrismaClient | undefined;
 }
 
 function createPrismaClient(): PrismaClient {
@@ -30,8 +37,8 @@ function createPrismaClient(): PrismaClient {
 }
 
 export const prisma: PrismaClient =
-  globalThis.__postsPrismaClient ?? createPrismaClient();
+  globalThis.__precisasePrismaClient ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
-  globalThis.__postsPrismaClient = prisma;
+  globalThis.__precisasePrismaClient = prisma;
 }

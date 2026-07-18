@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DuplicateInterestError,
+  InterestMessageTooLongError,
   InterestService,
+  MAX_INTEREST_MESSAGE_LENGTH,
   PostNotAvailableError,
   PostNotFoundError,
   type InterestPostSummary,
@@ -146,5 +148,29 @@ describe("InterestService.expressInterest (FR09, ARCHITECTURE.md §6.2)", () => 
     await expect(
       service.expressInterest({ postId: "post-1", userId: "user-2" }),
     ).rejects.toThrow(PostNotAvailableError);
+  });
+
+  it("rejects an interest message longer than the max length", async () => {
+    repo.seedPost(makePost({ status: "active" }));
+
+    await expect(
+      service.expressInterest({
+        postId: "post-1",
+        userId: "user-2",
+        message: "x".repeat(MAX_INTEREST_MESSAGE_LENGTH + 1),
+      }),
+    ).rejects.toThrow(InterestMessageTooLongError);
+  });
+
+  it("trims leading/trailing whitespace before length-checking the message", async () => {
+    repo.seedPost(makePost({ status: "active" }));
+
+    const result = await service.expressInterest({
+      postId: "post-1",
+      userId: "user-2",
+      message: "   hello world   ",
+    });
+
+    expect(result.message).toBe("hello world");
   });
 });

@@ -15,10 +15,174 @@ import type {
   ListActivePostsFilter,
   ModerationActionRecord,
   NotificationRecord,
+  PaginatedPosts,
   PostRecord,
   PostRepository,
+  PostSummary,
 } from "@/server/services/post-service";
+import { DEFAULT_LISTING_PAGE_SIZE } from "@/server/services/post-service";
 import { prisma } from "./prisma-client";
+
+/**
+ * Columns the listing queries (`listActive`/`listByAuthor`/`listPending`)
+ * actually read. Critically **omits `contact_value`** so the listing path
+ * never has the encrypted bytes in memory and therefore can never decrypt
+ * them — closing the PII-over-exposure path flagged in code review C1.
+ */
+const POST_SUMMARY_SELECT = {
+  id: true,
+  authorId: true,
+  categoryId: true,
+  type: true,
+  status: true,
+  title: true,
+  description: true,
+  locale: true,
+  extraAttributes: true,
+  publishedAt: true,
+  closedAt: true,
+  rejectedReason: true,
+  createdAt: true,
+  updatedAt: true,
+} as const satisfies Prisma.PostSelect;
+
+type PrismaPostSummary = Prisma.PostGetPayload<{ select: typeof POST_SUMMARY_SELECT }>;
+
+function toPostSummary(post: PrismaPostSummary): PostSummary {
+  return {
+    id: post.id,
+    authorId: post.authorId,
+    categoryId: post.categoryId,
+    type: post.type,
+    status: post.status,
+    title: post.title,
+    description: post.description,
+    locale: post.locale,
+    extraAttributes: (post.extraAttributes as Record<string, unknown> | null) ?? {},
+    publishedAt: post.publishedAt,
+    closedAt: post.closedAt,
+    rejectedReason: post.rejectedReason,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+  };
+}
+
+interface RawPostSummaryRow {
+  id: string;
+  authorId: string;
+  categoryId: string;
+  type: PostSummary["type"];
+  status: PostSummary["status"];
+  title: string;
+  description: string;
+  locale: string;
+  extraAttributes: Record<string, unknown> | null;
+  publishedAt: Date | null;
+  closedAt: Date | null;
+  rejectedReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function toPostSummaryFromRaw(row: RawPostSummaryRow): PostSummary {
+  return {
+    id: row.id,
+    authorId: row.authorId,
+    categoryId: row.categoryId,
+    type: row.type,
+    status: row.status,
+    title: row.title,
+    description: row.description,
+    locale: row.locale,
+    extraAttributes: row.extraAttributes ?? {},
+    publishedAt: row.publishedAt,
+    closedAt: row.closedAt,
+    rejectedReason: row.rejectedReason,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * Splits a fetched-`limit+1` row list into the page (`items`) plus a
+ * `nextCursor` pointing at the next page's start (the (limit+1)th row's
+ * id). Returns `nextCursor: null` when fewer than `limit+1` rows were
+ * returned, signaling end-of-list to the caller.
+ */
+function paginate(rows: PostSummary[], limit: number): PaginatedPosts {
+  if (rows.length <= limit) {
+    return { items: rows, nextCursor: null };
+  }
+  const page = rows.slice(0, limit);
+  return { items: page, nextCursor: page[page.length - 1]!.id };
+}
+
+/**
+ * Resolves a cursor post id to its `createdAt` so the next page can be
+ * fetched with `WHERE createdAt < cursorCreatedAt` + a tie-breaker on id.
+ * Returns null if the cursor post has been deleted between page fetches,
+ * which makes the next-page query return the first page (safe degradation
+ * — the user just sees page 1 again).
+ */
+async function cursorCreatedAt(postId: string): Promise<Date | null> {
+  const row = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { createdAt: true },
+  });
+  return row?.createdAt ?? null;
+}
+
+/**
+ * Shop-window keyword search via the `search_vector` GIN index (created
+ * by `20260718181500_post_search_indexes`). Raw SQL because Prisma's
+ * `where` API cannot express `tsvector @@ plainto_tsquery` over an
+ * `Unsupported("tsvector")` column — replacing this with `ILIKE` would
+ * silently regress to a seq scan.
+ */
+async function searchActivePostsViaFtsIndex(
+  filter: ListActivePostsFilter,
+  search: string,
+  limit: number,
+  cursorDate: Date | null,
+): Promise<PostSummary[]> {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`status = 'active'::post_status`,
+    Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`,
+  ];
+  if (filter.categoryId) {
+    conditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
+  }
+  if (filter.type) {
+    conditions.push(Prisma.sql`type = ${filter.type}::post_type`);
+  }
+  if (cursorDate) {
+    conditions.push(Prisma.sql`created_at < ${cursorDate}`);
+  }
+
+  const rows = await prisma.$queryRaw<RawPostSummaryRow[]>`
+    SELECT
+      id,
+      author_id   AS "authorId",
+      category_id AS "categoryId",
+      type,
+      status,
+      title,
+      description,
+      locale,
+      extra_attributes AS "extraAttributes",
+      published_at  AS "publishedAt",
+      closed_at     AS "closedAt",
+      rejected_reason AS "rejectedReason",
+      created_at    AS "createdAt",
+      updated_at    AS "updatedAt"
+    FROM posts
+    WHERE ${Prisma.join(conditions, " AND ")}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ${limit + 1}
+  `;
+
+  return rows.map(toPostSummaryFromRaw);
+}
 
 /**
  * Maps a Prisma `Post` row to the plaintext `PostRecord` domain type —
@@ -136,52 +300,49 @@ export class PrismaPostRepository implements PostRepository {
     return toPostRecord(created);
   }
 
-  async listActive(filter: ListActivePostsFilter): Promise<PostRecord[]> {
+  async listActive(filter: ListActivePostsFilter): Promise<PaginatedPosts> {
     const search = filter.search?.trim();
+    const limit = Math.max(1, Math.min(filter.limit ?? DEFAULT_LISTING_PAGE_SIZE, 100));
+    const cursorDate = filter.after ? await cursorCreatedAt(filter.after) : null;
 
-    const posts = await prisma.post.findMany({
-      where: {
-        status: "active",
-        ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
-        ...(filter.type ? { type: filter.type } : {}),
-        // Simple ILIKE fallback for keyword search (FR07). A GIN index on
-        // the generated `search_vector` column and a pg_trgm trigram index
-        // over (title, description) are created via raw SQL in the
-        // migration (see prisma/migrations/*_search_indexes/migration.sql)
-        // for production-grade full-text/fuzzy search; this ILIKE filter
-        // keeps the repository usable without depending on Prisma support
-        // for `Unsupported("tsvector")` filtering, which does not exist.
-        ...(search
-          ? {
-              OR: [
-                { title: { contains: search, mode: "insensitive" as const } },
-                { description: { contains: search, mode: "insensitive" as const } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    if (!search) {
+      const rows = await prisma.post.findMany({
+        where: {
+          status: "active",
+          ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
+          ...(filter.type ? { type: filter.type } : {}),
+          ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
+        select: POST_SUMMARY_SELECT,
+      });
 
-    return Promise.all(posts.map(toPostRecord));
+      return paginate(rows.map(toPostSummary), limit);
+    }
+
+    const searchRows = await searchActivePostsViaFtsIndex(filter, search, limit, cursorDate);
+    return paginate(searchRows, limit);
   }
 
-  async listByAuthor(authorId: string): Promise<PostRecord[]> {
+  async listByAuthor(authorId: string): Promise<PostSummary[]> {
     const posts = await prisma.post.findMany({
       where: { authorId },
       orderBy: { createdAt: "desc" },
+      select: POST_SUMMARY_SELECT,
     });
 
-    return Promise.all(posts.map(toPostRecord));
+    return posts.map(toPostSummary);
   }
 
-  async listPending(): Promise<PostRecord[]> {
+  async listPending(): Promise<PostSummary[]> {
     const posts = await prisma.post.findMany({
       where: { status: "pending" },
       orderBy: { createdAt: "asc" },
+      select: POST_SUMMARY_SELECT,
     });
 
-    return Promise.all(posts.map(toPostRecord));
+    return posts.map(toPostSummary);
   }
 
   async addModerationAction(action: ModerationActionRecord): Promise<void> {

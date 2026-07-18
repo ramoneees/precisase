@@ -35,6 +35,12 @@ coverage/
 *.local
 tmp/
 
+# Dev/CI outbox for ConsoleMailer (src/server/notifications/mailer.ts) — a
+# local record of "sent" emails so a manual QA pass can confirm
+# notifications fired without real email infrastructure. Never contains
+# anything that should be committed.
+.dev-outbox/
+
 /src/generated/prisma
 
 # User-uploaded post photos (local dev) — see src/app/api/uploads/route.ts.

@@ -36,7 +36,7 @@ function renderForm() {
   return render(
     <NextIntlClientProvider locale="pt-PT" messages={ptPT}>
       <ToastProvider>
-        <CreatePostForm locale="pt-PT" categories={categories} />
+        <CreatePostForm categories={categories} />
       </ToastProvider>
     </NextIntlClientProvider>,
   );
@@ -118,7 +118,6 @@ describe("CreatePostForm submit-disabled logic", () => {
         description: "Descrição detalhada do pedido.",
         contactValue: "912 345 678",
         consent: true,
-        locale: "pt-PT",
       }),
     );
   });

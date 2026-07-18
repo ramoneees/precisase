@@ -24,6 +24,12 @@ export interface AuthUserRecord {
   passwordHash: string;
   displayName: string;
   role: AuthRole;
+  /** ISO 3166-1 alpha-2 country code — threaded onto `session.user` for locale-aware rendering. */
+  country: string | null;
+  /** IANA time zone — threaded onto `session.user` for date/time display. */
+  timeZone: string | null;
+  /** ISO 4217 currency code — threaded onto `session.user` for currency formatting. */
+  currency: string | null;
   /** Soft-delete marker (§5.1) — a deleted user may never authenticate. */
   deletedAt: Date | null;
 }
@@ -57,6 +63,9 @@ export interface AuthenticatedUser {
   email: string;
   displayName: string;
   role: AuthRole;
+  country: string | null;
+  timeZone: string | null;
+  currency: string | null;
 }
 
 /**
@@ -89,5 +98,8 @@ export async function verifyCredentials(
     email: user.email,
     displayName: user.displayName,
     role: user.role,
+    country: user.country,
+    timeZone: user.timeZone,
+    currency: user.currency,
   };
 }

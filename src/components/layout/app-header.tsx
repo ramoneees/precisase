@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { LanguageSwitcher } from "./language-switcher";
 
 /**
  * Shared sticky header, used from the root `[locale]/layout.tsx` so every
@@ -51,13 +52,17 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
           ) : null}
         </div>
 
+        <LanguageSwitcher />
+
         {session?.user ? (
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F0EA] text-sm font-semibold text-[#2F6B4F]"
-            title={displayName ?? undefined}
+          <Link
+            href="/profile"
+            aria-label={t("myAccount")}
+            title={displayName ?? t("myAccount")}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F0EA] text-sm font-semibold text-[#2F6B4F] hover:opacity-80"
           >
             {getInitials(displayName)}
-          </span>
+          </Link>
         ) : (
           <Link
             href="/signin"

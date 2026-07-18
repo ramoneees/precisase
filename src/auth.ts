@@ -47,12 +47,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         // Shape expected by NextAuth's `User` type (augmented in
-        // next-auth.d.ts to require `id` and `role`).
+        // next-auth.d.ts). Region preferences are copied through to the
+        // JWT/session so locale-aware rendering doesn't need a per-render
+        // DB lookup.
         return {
           id: user.id,
           email: user.email,
           name: user.displayName,
           role: user.role,
+          country: user.country,
+          timeZone: user.timeZone,
+          currency: user.currency,
         };
       },
     }),
@@ -62,6 +67,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.country = user.country ?? null;
+        token.timeZone = user.timeZone ?? null;
+        token.currency = user.currency ?? null;
       }
       return token;
     },
@@ -72,6 +80,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // under pnpm's non-hoisted @auth/core layout.
         session.user.id = token.id as string;
         session.user.role = token.role as AuthRole;
+        session.user.country = (token.country as string | null | undefined) ?? null;
+        session.user.timeZone = (token.timeZone as string | null | undefined) ?? null;
+        session.user.currency = (token.currency as string | null | undefined) ?? null;
       }
       return session;
     },

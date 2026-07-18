@@ -61,6 +61,12 @@ export default async function LocaleLayout({
     <html
       lang={locale}
       className={`${nunito.variable} ${inter.variable} h-full antialiased`}
+      // Some browser extensions (e.g. "One Sec") inject attributes onto
+      // <html> before React hydrates, which otherwise trips a hydration
+      // mismatch warning that has nothing to do with app code — see
+      // https://react.dev/link/hydration-mismatch. Scoped to this one
+      // element so real mismatches elsewhere in the tree still surface.
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-[#F7F4EE] text-[#232922]">
         <NextIntlClientProvider>

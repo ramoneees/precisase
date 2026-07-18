@@ -38,6 +38,9 @@ function makeUser(overrides: Partial<AuthUserRecord> = {}): AuthUserRecord {
     passwordHash: "hashed:correct-password",
     displayName: "Ana",
     role: "user",
+    country: null,
+    timeZone: null,
+    currency: null,
     deletedAt: null,
     ...overrides,
   };
@@ -87,6 +90,9 @@ describe("verifyCredentials (docs/ARCHITECTURE.md §4.4)", () => {
       email: "ana@example.com",
       displayName: "Ana",
       role: "moderator",
+      country: null,
+      timeZone: null,
+      currency: null,
     });
     expect(result).not.toHaveProperty("passwordHash");
   });

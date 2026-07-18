@@ -79,6 +79,7 @@ export default async function MyPostsPage({
       title: post.title,
       photoUrl,
       interestCount: interestCountByPostId.get(post.id) ?? 0,
+      rejectedReason: post.rejectedReason,
     };
   });
 

@@ -5,6 +5,14 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { signup, type SignupErrorCode } from "./actions";
 
+function browserTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Sign-up form (docs/ARCHITECTURE.md §7.5, BR06 — docs/MVP.md). Copy comes
  * entirely from the `auth.signUp` namespace — no hardcoded user-facing
@@ -27,6 +35,7 @@ export function SignupForm({ locale }: { locale: string }) {
   const [error, setError] = useState<SignupErrorCode | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [timeZone] = useState(browserTimeZone);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,6 +60,7 @@ export function SignupForm({ locale }: { locale: string }) {
         confirmPassword,
         consent,
         locale,
+        timeZone: timeZone ?? undefined,
       });
 
       if (!result.ok) {
@@ -142,7 +152,17 @@ export function SignupForm({ locale }: { locale: string }) {
           onChange={(event) => setConsent(event.target.checked)}
           className="mt-1 accent-[#2F6B4F]"
         />
-        <span>{t("consentLabel")}</span>
+        <span>
+          {t("consentLabel")}{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-[#2F6B4F] underline"
+          >
+            {t("consentPrivacyLinkLabel")}
+          </Link>
+        </span>
       </label>
 
       {error ? (

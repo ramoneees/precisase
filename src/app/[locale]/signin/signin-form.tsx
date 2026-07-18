@@ -9,7 +9,7 @@ import { signin, type SigninErrorCode } from "./actions";
  * Sign-in form. Copy comes entirely from the `auth.signIn` namespace — no
  * hardcoded user-facing strings (docs/ARCHITECTURE.md §4.6/§10 hard rule).
  */
-export function SigninForm({ locale }: { locale: string }) {
+export function SigninForm() {
   const t = useTranslations("auth.signIn");
 
   const [email, setEmail] = useState("");
@@ -22,7 +22,7 @@ export function SigninForm({ locale }: { locale: string }) {
     setError(null);
 
     startTransition(async () => {
-      const result = await signin({ email, password, locale });
+      const result = await signin({ email, password });
       if (!result.ok) {
         setError(result.error);
       }

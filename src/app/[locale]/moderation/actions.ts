@@ -67,6 +67,8 @@ export async function approvePostAction(
 
   const resolvedLocale = isSupportedLocale(locale) ? locale : routing.defaultLocale;
   revalidatePath(`/${resolvedLocale}/moderation`);
+  revalidatePath("/", "page");
+  revalidatePath(`/${resolvedLocale}/my-posts`);
 
   return { ok: true };
 }
@@ -98,6 +100,7 @@ export async function rejectPostAction(
 
   const resolvedLocale = isSupportedLocale(locale) ? locale : routing.defaultLocale;
   revalidatePath(`/${resolvedLocale}/moderation`);
+  revalidatePath(`/${resolvedLocale}/my-posts`);
 
   return { ok: true };
 }

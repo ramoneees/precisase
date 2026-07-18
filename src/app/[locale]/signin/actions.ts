@@ -11,7 +11,6 @@
 
 import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
-import { routing, type AppLocale } from "@/i18n/routing";
 
 export type SigninErrorCode = "invalidCredentials" | "generic";
 
@@ -20,23 +19,14 @@ export type SigninResult = { ok: true } | { ok: false; error: SigninErrorCode };
 export interface SigninInput {
   email: string;
   password: string;
-  locale: string;
-}
-
-function isSupportedLocale(locale: string): locale is AppLocale {
-  return (routing.locales as readonly string[]).includes(locale);
 }
 
 export async function signin(input: SigninInput): Promise<SigninResult> {
-  const locale = isSupportedLocale(input.locale)
-    ? input.locale
-    : routing.defaultLocale;
-
   try {
     await signIn("credentials", {
       email: input.email,
       password: input.password,
-      redirectTo: `/${locale}`,
+      redirectTo: "/",
     });
   } catch (error) {
     if (error instanceof AuthError) {

@@ -96,6 +96,15 @@ export interface ExpressInterestInput {
   message?: string | null;
 }
 
+export const MAX_INTEREST_MESSAGE_LENGTH = 1000;
+
+export class InterestMessageTooLongError extends Error {
+  constructor(maxLength: number) {
+    super(`Interest message must be at most ${maxLength} characters.`);
+    this.name = "InterestMessageTooLongError";
+  }
+}
+
 export class InterestService {
   constructor(private readonly repo: InterestRepository) {}
 
@@ -110,6 +119,11 @@ export class InterestService {
     userId,
     message = null,
   }: ExpressInterestInput): Promise<InterestRecord> {
+    const trimmedMessage = message !== null ? message.trim() : null;
+    if (trimmedMessage !== null && trimmedMessage.length > MAX_INTEREST_MESSAGE_LENGTH) {
+      throw new InterestMessageTooLongError(MAX_INTEREST_MESSAGE_LENGTH);
+    }
+
     const post = await this.repo.findPostById(postId);
     if (!post) {
       throw new PostNotFoundError(postId);
@@ -124,7 +138,7 @@ export class InterestService {
       throw new DuplicateInterestError(postId, userId);
     }
 
-    const interest = await this.repo.createInterest({ postId, userId, message });
+    const interest = await this.repo.createInterest({ postId, userId, message: trimmedMessage });
 
     await this.repo.addNotification({
       recipientId: post.authorId,
@@ -132,7 +146,7 @@ export class InterestService {
       type: "interest_received",
       channel: "email",
       status: "queued",
-      payload: { postId, title: post.title, interestedUserId: userId, message },
+      payload: { postId, title: post.title, interestedUserId: userId, message: trimmedMessage },
     });
 
     return interest;

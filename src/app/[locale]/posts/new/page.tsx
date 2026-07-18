@@ -1,32 +1,21 @@
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 import { auth } from "@/auth";
 import { redirect } from "@/i18n/navigation";
-import type { AppLocale } from "@/i18n/routing";
 import { listCategories } from "@/server/categories";
 import { CreatePostForm } from "./create-post-form";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
-  const { locale } = await params;
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
   const t = await getTranslations({ locale, namespace: "post.createForm" });
   return { title: t("heading") };
 }
 
-export default async function NewPostPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
-  const { locale } = await params;
-  setRequestLocale(locale);
-
+export default async function NewPostPage() {
+  const locale = await getLocale();
   const session = await auth();
   if (!session?.user) {
-    redirect({ href: "/signin", locale: locale as AppLocale });
+    redirect({ href: "/signin", locale });
   }
 
   const categories = await listCategories();
@@ -41,7 +30,7 @@ export default async function NewPostPage({
         <p className="text-sm text-[#6B7268]">{t("subtitle")}</p>
       </div>
 
-      <CreatePostForm locale={locale} categories={categories} />
+      <CreatePostForm categories={categories} />
     </main>
   );
 }

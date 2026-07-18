@@ -31,7 +31,7 @@ export default async function SigninPage({
           </h1>
           <p className="text-center text-sm text-[#6B7268]">{t("subtitle")}</p>
         </div>
-        <SigninForm locale={locale} />
+        <SigninForm />
       </div>
     </main>
   );

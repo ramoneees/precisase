@@ -15,6 +15,8 @@ export interface MyPostRowData {
   title: string;
   photoUrl: string;
   interestCount: number;
+  /** Only meaningful when `status === "rejected"` (FR03) — shown to the author so they know what to fix. */
+  rejectedReason: string | null;
 }
 
 /**
@@ -71,6 +73,11 @@ export function MyPostRow({ post, locale }: { post: MyPostRowData; locale: strin
         </div>
         <p className="font-heading text-base font-extrabold text-[#232922]">{post.title}</p>
         <p className="text-xs text-[#9AA098]">{t("interestCount", { count: post.interestCount })}</p>
+        {post.status === "rejected" && post.rejectedReason ? (
+          <p className="rounded-lg bg-[#F7E4DE] px-3 py-2 text-xs text-[#B23B23]">
+            <span className="font-semibold">{t("rejectedReasonLabel")}</span> {post.rejectedReason}
+          </p>
+        ) : null}
         {error ? (
           <p role="alert" className="text-xs text-[#B23B23]">
             {error}
@@ -98,6 +105,14 @@ export function MyPostRow({ post, locale }: { post: MyPostRowData; locale: strin
           >
             {t("actions.reopen")}
           </button>
+        ) : null}
+        {post.status === "rejected" ? (
+          <Link
+            href={`/my-posts/${post.id}/edit`}
+            className="rounded-full bg-[#2F6B4F] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            {t("actions.editAndResubmit")}
+          </Link>
         ) : null}
         <Link
           href={`/posts/${post.id}`}

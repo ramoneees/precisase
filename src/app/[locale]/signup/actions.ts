@@ -15,6 +15,11 @@ import {
   createUserWithConsent,
   EmailAlreadyRegisteredError,
 } from "@/server/auth/user-repository";
+import {
+  defaultCurrencyFor,
+  defaultTimeZoneFor,
+  deriveCountryFromUiLocale,
+} from "@/lib/region-defaults";
 import { routing, type AppLocale } from "@/i18n/routing";
 
 export type SignupErrorCode =
@@ -34,6 +39,8 @@ export interface SignupInput {
   confirmPassword: string;
   consent: boolean;
   locale: string;
+  /** IANA time zone sniffed client-side at signup. Optional — the server derives a fallback if absent. */
+  timeZone?: string;
 }
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -77,7 +84,10 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
       email,
       passwordHash,
       displayName,
-      locale,
+      uiLocale: locale,
+      country: deriveCountryFromUiLocale(locale),
+      timeZone: input.timeZone ?? defaultTimeZoneFor(deriveCountryFromUiLocale(locale)),
+      currency: defaultCurrencyFor(deriveCountryFromUiLocale(locale)),
     });
   } catch (error) {
     if (error instanceof EmailAlreadyRegisteredError) {

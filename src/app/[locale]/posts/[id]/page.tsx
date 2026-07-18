@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
@@ -11,6 +12,8 @@ import { getPostPhotos } from "@/lib/post-photos";
 import { resolvePhotoUrl } from "@/lib/resolve-photo-url";
 import { placeholderPhoto } from "@/lib/placeholder-photo";
 import { colors } from "@/lib/design-tokens";
+import { formatDateTime } from "@/lib/format";
+import { defaultTimeZoneForUiLocale } from "@/lib/region-defaults";
 import { TypeBadge, CategoryBadge, StatusBadge } from "@/components/posts/badges";
 import { PhotoGallery } from "@/components/posts/photo-gallery";
 import { ContactPanel } from "./contact-panel";
@@ -21,7 +24,7 @@ interface PageParams {
   id: string;
 }
 
-async function loadPost(params: PageParams) {
+async function loadPostUncached(params: PageParams) {
   const { locale, id } = params;
   const session = await auth();
   const viewer = session?.user ? { id: session.user.id, role: session.user.role } : null;
@@ -36,21 +39,30 @@ async function loadPost(params: PageParams) {
     throw error;
   }
 
-  const [author, category] = await Promise.all([
+  const [author, category, existingInterest] = await Promise.all([
     prisma.user.findUnique({ where: { id: post.authorId }, select: { displayName: true } }),
     findCategoryById(post.categoryId),
+    viewer && viewer.id !== post.authorId
+      ? prisma.interest.findUnique({
+          where: { postId_userId: { postId: post.id, userId: viewer.id } },
+        })
+      : Promise.resolve(null),
   ]);
 
   const isAuthor = viewer?.id === post.authorId;
-  const existingInterest =
-    viewer && !isAuthor
-      ? await prisma.interest.findUnique({
-          where: { postId_userId: { postId: post.id, userId: viewer.id } },
-        })
-      : null;
 
   return { post, author, category, viewer, isAuthor, existingInterest, locale };
 }
+
+/**
+ * Request-scoped de-duplication: both `generateMetadata` and the page body
+ * call this with the same `params`, and Next.js does NOT dedupe Prisma
+ * queries the way it dedupes `fetch()`. Without `cache()`, the detail page
+ * was issuing 6–8 redundant DB queries + 2 unnecessary contact-value
+ * decrypts per view. `cache()` returns the same Promise for the same
+ * arguments within a single request.
+ */
+const loadPost = cache(loadPostUncached);
 
 export async function generateMetadata({
   params,
@@ -90,11 +102,10 @@ export default async function PostDetailPage({
       ? uploadedPhotos
       : [placeholderPhoto(category ? tCategory(category.slug) : "", categoryTint)];
 
-  const formattedDate = new Intl.DateTimeFormat(locale, {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(post.createdAt);
+  const formattedDate = formatDateTime(post.createdAt, {
+    locale,
+    timeZone: defaultTimeZoneForUiLocale(locale),
+  });
 
   return (
     <main className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-6 px-6 py-10">

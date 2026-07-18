@@ -39,10 +39,8 @@ function mapUploadError(body: UploadErrorBody): UploadErrorCode {
  * actions.ts), so this is a convenience layer, not the source of truth.
  */
 export function CreatePostForm({
-  locale,
   categories,
 }: {
-  locale: string;
   categories: CategoryLite[];
 }) {
   const t = useTranslations("post.createForm");
@@ -136,7 +134,6 @@ export function CreatePostForm({
         contactValue,
         consent,
         photos,
-        locale,
       });
 
       if (!result.ok) {

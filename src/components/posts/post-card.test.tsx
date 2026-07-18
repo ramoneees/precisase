@@ -35,7 +35,11 @@ function makeCard(overrides: Partial<PostCardData> = {}): PostCardData {
 function renderCard(card: PostCardData, locale: "pt-PT" | "en" = "pt-PT") {
   const messages = locale === "pt-PT" ? ptPT : en;
   return render(
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider
+      locale={locale}
+      messages={messages}
+      timeZone="UTC"
+    >
       <PostCard post={card} />
     </NextIntlClientProvider>,
   );
@@ -95,7 +99,7 @@ describe("PostCard", () => {
 describe("EmptyState", () => {
   it("renders the translated empty-state title and description", () => {
     render(
-      <NextIntlClientProvider locale="pt-PT" messages={ptPT}>
+      <NextIntlClientProvider locale="pt-PT" messages={ptPT} timeZone="UTC">
         <EmptyState />
       </NextIntlClientProvider>,
     );
@@ -106,7 +110,7 @@ describe("EmptyState", () => {
 
   it("switches strings when rendered under the en catalog", () => {
     render(
-      <NextIntlClientProvider locale="en" messages={en}>
+      <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
         <EmptyState />
       </NextIntlClientProvider>,
     );

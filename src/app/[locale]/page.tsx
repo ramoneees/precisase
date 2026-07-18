@@ -17,6 +17,7 @@ interface ListingSearchParams {
   category?: string;
   type?: string;
   q?: string;
+  after?: string;
 }
 
 function buildQuery(
@@ -64,11 +65,13 @@ export default async function HomePage({
     categoryId: selectedCategory?.id,
     type: selectedType,
     search,
+    after: sp.after,
   });
+  const { nextCursor } = posts;
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
 
-  const authorIds = [...new Set(posts.map((post) => post.authorId))];
+  const authorIds = [...new Set(posts.items.map((post) => post.authorId))];
   const authors = authorIds.length
     ? await prisma.user.findMany({
         where: { id: { in: authorIds } },
@@ -77,7 +80,7 @@ export default async function HomePage({
     : [];
   const authorNameById = new Map(authors.map((author) => [author.id, author.displayName]));
 
-  const cards: PostCardData[] = posts.map((post) => {
+  const cards: PostCardData[] = posts.items.map((post) => {
     const category = categoryById.get(post.categoryId);
     const categoryKey = category?.key ?? "category.volunteering";
     const photos = getPostPhotos(post.extraAttributes);
@@ -115,7 +118,7 @@ export default async function HomePage({
       </div>
 
       <form
-        action={`/${locale}`}
+        action="/"
         method="get"
         role="search"
         className="flex items-center gap-2"
@@ -186,6 +189,15 @@ export default async function HomePage({
           cards.map((card) => <PostCard key={card.id} post={card} />)
         )}
       </div>
+
+      {nextCursor ? (
+        <Link
+          href={buildQuery(currentParams, { after: nextCursor })}
+          className="mx-auto rounded-full border border-[#E3DED2] bg-white px-6 py-2.5 text-sm font-medium text-[#2F6B4F] hover:border-[#2F6B4F]"
+        >
+          {t("loadMore")}
+        </Link>
+      ) : null}
     </main>
   );
 }

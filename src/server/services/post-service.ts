@@ -66,6 +66,19 @@ export interface PostRecord {
   updatedAt: Date;
 }
 
+/**
+ * Listing-view projection of a Post: every field a shop-window / my-posts /
+ * moderation-queue row needs, with the encrypted contact info stripped.
+ *
+ * Why this exists: previously every list query loaded the full `PostRecord`
+ * including the encrypted `contact_value`, which the repository decrypted
+ * on every row (§7.4) — meaning the home page decrypted every active post's
+ * contact phone/email into server memory even though the UI never renders
+ * it. Returning `PostSummary` from list methods makes that path
+ * structurally impossible.
+ */
+export type PostSummary = Omit<PostRecord, "contactMethod" | "contactValue">;
+
 export interface ModerationActionRecord {
   postId: string;
   moderatorId: string;
@@ -113,6 +126,25 @@ export interface ListActivePostsFilter {
   categoryId?: string;
   type?: PostTypeValue;
   search?: string;
+  /**
+   * Cursor-based pagination: id of the last post on the previous page.
+   * Combined with `limit`, the listing returns rows older than this
+   * cursor (createdAt-desc order). Undefined on the first page.
+   */
+  after?: string;
+  limit?: number;
+}
+
+export const DEFAULT_LISTING_PAGE_SIZE = 24;
+
+export interface PaginatedPosts {
+  items: PostSummary[];
+  /**
+   * Cursor for the next page, or `null` if the requested page was the
+   * last one. The repository signals "more rows exist" by fetching
+   * `limit + 1` rows and exposing the (limit+1)th row's id here.
+   */
+  nextCursor: string | null;
 }
 
 /**
@@ -135,9 +167,13 @@ export interface PostRepository {
    * Shop-window listing query (FR06–FR08) — read-only, filtering/search is
    * a query concern left to the repository implementation (e.g. Postgres
    * full-text/trigram search per §5.1). Must only ever return `active`
-   * posts.
+   * posts. Returns `PostSummary` (no contact info) — listings never render
+   * contact details, and stripping them here makes it impossible for the
+   * repository to silently decrypt rows it doesn't need to. Cursor-
+   * paginated: fetch `limit + 1` rows and expose the trailing row's id as
+   * `nextCursor` (null when the page was the last one).
    */
-  listActive(filter: ListActivePostsFilter): Promise<PostRecord[]>;
+  listActive(filter: ListActivePostsFilter): Promise<PaginatedPosts>;
   /**
    * "My posts" query (author dashboard) — returns every post belonging to
    * `authorId` regardless of status (pending/active/closed/rejected), newest
@@ -145,13 +181,13 @@ export interface PostRepository {
    * status: the whole point of the my-posts view is to let an author see
    * posts still awaiting moderation or rejected.
    */
-  listByAuthor(authorId: string): Promise<PostRecord[]>;
+  listByAuthor(authorId: string): Promise<PostSummary[]>;
   /**
    * Moderation queue (FR15) — every post currently awaiting a moderation
    * decision, oldest first (so moderators clear the longest-waiting posts
    * first). Must only ever return `pending` posts.
    */
-  listPending(): Promise<PostRecord[]>;
+  listPending(): Promise<PostSummary[]>;
   addModerationAction(action: ModerationActionRecord): Promise<void>;
   addNotification(notification: NotificationRecord): Promise<void>;
   addAuditLog(log: AuditLogRecord): Promise<void>;
@@ -225,7 +261,20 @@ export interface ReopenPostInput {
 export interface ResubmitPostInput {
   postId: string;
   actor: Actor;
-  updates: Partial<Pick<PostRecord, "title" | "description" | "categoryId" | "type">>;
+  /**
+   * `contactMethod`/`contactValue` are included here (beyond the original
+   * title/description/categoryId/type surface) because a post can be
+   * rejected specifically for bad contact info (§7.2) — without this, an
+   * author would be stuck unable to fix the one thing moderation flagged.
+   * Mirrors `EditActivePostInput.updates` and the same BR04 enforcement
+   * below.
+   */
+  updates: Partial<
+    Pick<
+      PostRecord,
+      "title" | "description" | "categoryId" | "type" | "contactMethod" | "contactValue"
+    >
+  >;
 }
 
 /** FR01 — a new post always starts `pending` (BR01); the caller cannot set status. */
@@ -250,6 +299,23 @@ export interface EditActivePostInput {
 
 function isModerator(actor: Actor): boolean {
   return actor.role === "moderator" || actor.role === "admin";
+}
+
+function buildPostAuditEntry(args: {
+  actorId: string;
+  action: string;
+  postId: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+}): AuditLogRecord {
+  return {
+    actorId: args.actorId,
+    action: args.action,
+    targetType: "Post",
+    targetId: args.postId,
+    ...(args.before !== undefined ? { before: args.before } : {}),
+    ...(args.after !== undefined ? { after: args.after } : {}),
+  };
 }
 
 export class PostService {
@@ -297,14 +363,15 @@ export class PostService {
       payload: { postId, title: post.title },
     });
 
-    await this.repo.addAuditLog({
-      actorId: moderator.id,
-      action: "post.approve",
-      targetType: "Post",
-      targetId: postId,
-      before: { status: post.status },
-      after: { status: updated.status },
-    });
+    await this.repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: moderator.id,
+        action: "post.approve",
+        postId,
+        before: { status: post.status },
+        after: { status: updated.status },
+      }),
+    );
 
     return updated;
   }
@@ -347,14 +414,15 @@ export class PostService {
       payload: { postId, title: post.title, reason },
     });
 
-    await this.repo.addAuditLog({
-      actorId: moderator.id,
-      action: "post.reject",
-      targetType: "Post",
-      targetId: postId,
-      before: { status: post.status },
-      after: { status: updated.status, rejectedReason: reason },
-    });
+    await this.repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: moderator.id,
+        action: "post.reject",
+        postId,
+        before: { status: post.status },
+        after: { status: updated.status, rejectedReason: reason },
+      }),
+    );
 
     return updated;
   }
@@ -383,14 +451,15 @@ export class PostService {
       closedAt,
     });
 
-    await this.repo.addAuditLog({
-      actorId: actor.id,
-      action: "post.close",
-      targetType: "Post",
-      targetId: postId,
-      before: { status: post.status },
-      after: { status: updated.status },
-    });
+    await this.repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: actor.id,
+        action: "post.close",
+        postId,
+        before: { status: post.status },
+        after: { status: updated.status },
+      }),
+    );
 
     return updated;
   }
@@ -414,14 +483,15 @@ export class PostService {
       closedAt: null,
     });
 
-    await this.repo.addAuditLog({
-      actorId: actor.id,
-      action: "post.reopen",
-      targetType: "Post",
-      targetId: postId,
-      before: { status: post.status },
-      after: { status: updated.status },
-    });
+    await this.repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: actor.id,
+        action: "post.reopen",
+        postId,
+        before: { status: post.status },
+        after: { status: updated.status },
+      }),
+    );
 
     return updated;
   }
@@ -443,20 +513,28 @@ export class PostService {
       throw new InvalidPostTransitionError(post.status, "pending");
     }
 
+    if (updates.contactMethod !== undefined || updates.contactValue !== undefined) {
+      this.requireContactInfo(
+        updates.contactMethod ?? post.contactMethod,
+        updates.contactValue ?? post.contactValue,
+      );
+    }
+
     const updated = await this.repo.update(postId, {
       ...updates,
       status: "pending",
       rejectedReason: null,
     });
 
-    await this.repo.addAuditLog({
-      actorId: actor.id,
-      action: "post.resubmit",
-      targetType: "Post",
-      targetId: postId,
-      before: { status: post.status, rejectedReason: post.rejectedReason },
-      after: { status: updated.status },
-    });
+    await this.repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: actor.id,
+        action: "post.resubmit",
+        postId,
+        before: { status: post.status, rejectedReason: post.rejectedReason },
+        after: { status: updated.status },
+      }),
+    );
 
     return updated;
   }
@@ -474,13 +552,14 @@ export class PostService {
 
     const created = await this.repo.create(input);
 
-    await this.repo.addAuditLog({
-      actorId: input.authorId,
-      action: "post.create",
-      targetType: "Post",
-      targetId: created.id,
-      after: { status: created.status },
-    });
+    await this.repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: input.authorId,
+        action: "post.create",
+        postId: created.id,
+        after: { status: created.status },
+      }),
+    );
 
     return created;
   }
@@ -513,22 +592,23 @@ export class PostService {
 
     const updated = await this.repo.update(postId, updates);
 
-    await this.repo.addAuditLog({
-      actorId: actor.id,
-      action: "post.edit",
-      targetType: "Post",
-      targetId: postId,
-      before: {
-        title: post.title,
-        description: post.description,
-        contactMethod: post.contactMethod,
-      },
-      after: {
-        title: updated.title,
-        description: updated.description,
-        contactMethod: updated.contactMethod,
-      },
-    });
+    await this.repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: actor.id,
+        action: "post.edit",
+        postId,
+        before: {
+          title: post.title,
+          description: post.description,
+          contactMethod: post.contactMethod,
+        },
+        after: {
+          title: updated.title,
+          description: updated.description,
+          contactMethod: updated.contactMethod,
+        },
+      }),
+    );
 
     return updated;
   }
@@ -566,7 +646,7 @@ export class PostService {
    * trigram search per §5.1) — but the port contract guarantees only
    * `active` posts are ever returned.
    */
-  async listActivePosts(filter: ListActivePostsFilter = {}): Promise<PostRecord[]> {
+  async listActivePosts(filter: ListActivePostsFilter = {}): Promise<PaginatedPosts> {
     return this.repo.listActive(filter);
   }
 
@@ -576,7 +656,7 @@ export class PostService {
    * `authorId` (an author needs to see pending/rejected posts too, not just
    * active ones).
    */
-  async listMyPosts(authorId: string): Promise<PostRecord[]> {
+  async listMyPosts(authorId: string): Promise<PostSummary[]> {
     return this.repo.listByAuthor(authorId);
   }
 
@@ -585,7 +665,7 @@ export class PostService {
    * pattern as `listActivePosts`/`listMyPosts`. Only pending posts are ever
    * returned (enforced by the port contract on `listPending`).
    */
-  async listPendingPosts(): Promise<PostRecord[]> {
+  async listPendingPosts(): Promise<PostSummary[]> {
     return this.repo.listPending();
   }
 

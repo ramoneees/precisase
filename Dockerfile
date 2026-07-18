@@ -5,15 +5,21 @@
 # This single image serves BOTH Compose services described in
 # ARCHITECTURE.md §3.1 / §8.1:
 #   - `web`    -> CMD ["node", "server.js"]  (default, see bottom of this file)
-#   - `worker` -> overridden `command:` in docker-compose.yml
+#   - `worker` -> overridden `command:` in docker-compose.yml, running the
+#                 notification worker (src/worker/notification-worker.ts)
+#                 via the `tsx` binary already present in `node_modules`.
 #
-# The notification worker codebase does not exist yet (§3.1: "same image,
-# different command"). Until it's implemented, docker-compose.yml runs a
-# placeholder command for `worker` that needs nothing beyond the Node
-# runtime already present in this image. Once a real worker entrypoint
-# exists (e.g. a compiled `dist/worker.js` or a `src/worker` script run via
-# a small runtime like `tsx`), add a build step here to produce it and
-# point the `worker` service's `command:` at it — no new image is required.
+# The `runner` stage below therefore ships two things side by side:
+#   1. The Next.js `output: "standalone"` bundle (`.next/standalone` +
+#      `.next/static` + `public`) — a self-contained, trimmed server used
+#      by the `web` command.
+#   2. The full `node_modules` + TypeScript source (`src/`, `messages/`,
+#      `tsconfig.json`) copied straight from the `builder` stage — needed
+#      so `tsx` can run `src/worker/notification-worker.ts` directly
+#      (no separate compile step, no second image). This is a deliberate
+#      trade-off: the image is larger than a web-only standalone image
+#      would be, in exchange for §3.1's "no second codebase to maintain"
+#      — one Dockerfile, one image tag, two `command:` overrides.
 
 ARG NODE_VERSION=22-alpine
 ARG PNPM_VERSION=9.15.4
@@ -65,10 +71,25 @@ RUN addgroup --system --gid 1001 nodejs \
 
 # Next.js `output: "standalone"` (next.config.ts) produces a self-contained
 # server bundle with only the node_modules it actually needs — this is what
-# keeps the runtime image small instead of shipping the full dependency tree.
+# keeps the `web` command's dependency footprint small.
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Notification worker runtime (§3.1, see comment at top of file): the full
+# node_modules (superset of what standalone needs — includes `tsx` and
+# every runtime dependency the worker's TypeScript imports resolve to) plus
+# the TypeScript source itself, so `tsx` can execute
+# src/worker/notification-worker.ts without a separate build/image.
+# `node_modules` here is copied on top of (merged with) the trimmed one
+# from `.next/standalone` above — Docker COPY merges directory contents, so
+# the `web` command keeps working unchanged and simply ends up with a
+# superset of modules available.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
+COPY --from=builder --chown=nextjs:nodejs /app/messages ./messages
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
 
 USER nextjs
 EXPOSE 3000
@@ -79,6 +100,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD node -e "require('http').get('http://127.0.0.1:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
 
 # Default command runs the `web` service. The `worker` service in
-# docker-compose.yml overrides this with its own (currently placeholder)
-# command — see the comment at the top of this file.
+# docker-compose.yml overrides this to run the notification worker via
+# `tsx` instead — see the comment at the top of this file.
 CMD ["node", "server.js"]

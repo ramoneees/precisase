@@ -9,7 +9,7 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "./prisma-client";
+import { prisma } from "@/server/repositories/prisma-client";
 import type { AuthRole, AuthUserRecord, AuthUserRepository } from "@/server/services/auth-service";
 
 /** Current terms/privacy policy version recorded on ConsentRecord (§7.5). */
@@ -17,7 +17,20 @@ export const CONSENT_VERSION = "v1";
 
 export class PrismaAuthUserRepository implements AuthUserRepository {
   async findUserByEmail(email: string): Promise<AuthUserRecord | null> {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        displayName: true,
+        role: true,
+        country: true,
+        timeZone: true,
+        currency: true,
+        deletedAt: true,
+      },
+    });
     if (!user) {
       return null;
     }
@@ -28,6 +41,9 @@ export class PrismaAuthUserRepository implements AuthUserRepository {
       passwordHash: user.passwordHash,
       displayName: user.displayName,
       role: user.role as AuthRole,
+      country: user.country,
+      timeZone: user.timeZone,
+      currency: user.currency,
       deletedAt: user.deletedAt,
     };
   }
@@ -44,7 +60,13 @@ export interface CreateUserWithConsentInput {
   email: string;
   passwordHash: string;
   displayName: string;
-  locale: string;
+  uiLocale: string;
+  /** ISO 3166-1 alpha-2 country code (PT, BR, US, …). Optional — derived from signup locale if absent. */
+  country?: string | null;
+  /** IANA time zone (Europe/Lisbon, …). Optional — derived from country if absent. */
+  timeZone?: string | null;
+  /** ISO 4217 currency code (EUR, BRL, …). Optional — derived from country if absent. */
+  currency?: string | null;
 }
 
 export interface CreatedUser {
@@ -79,7 +101,10 @@ export async function createUserWithConsent(
           email: input.email,
           passwordHash: input.passwordHash,
           displayName: input.displayName,
-          locale: input.locale,
+          uiLocale: input.uiLocale,
+          country: input.country ?? null,
+          timeZone: input.timeZone ?? null,
+          currency: input.currency ?? null,
           consentAt: grantedAt,
         },
       });
