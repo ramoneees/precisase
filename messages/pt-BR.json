@@ -1,0 +1,179 @@
+{
+  "nav": {
+    "brand": "Precisa-se",
+    "home": "Início",
+    "publish": "Publicar",
+    "myPosts": "Meus posts",
+    "moderation": "Moderação",
+    "signIn": "Entrar"
+  },
+  "listing": {
+    "title": "A vitrine da comunidade",
+    "subtitle": "Pedidos e ofertas de voluntariado e doações dentro da Casa da Cidade. Encontre quem precisa — ou quem pode ajudar.",
+    "searchPlaceholder": "Pesquisar por título ou descrição…",
+    "search": "Pesquisar",
+    "filters": {
+      "allCategories": "Todas as categorias",
+      "allTypes": "Todos",
+      "requests": "Pedidos",
+      "offers": "Ofertas"
+    },
+    "resultsCount": "{count, plural, one {# post ativo} other {# posts ativos}}",
+    "empty": {
+      "title": "Sem resultados",
+      "description": "Tente outra pesquisa ou remova os filtros."
+    }
+  },
+  "category": {
+    "volunteering": "Voluntariado",
+    "donation": "Doação"
+  },
+  "post": {
+    "type": {
+      "request": "Pedido",
+      "offer": "Oferta"
+    },
+    "status": {
+      "pending": "Pendente",
+      "active": "Ativo",
+      "closed": "Resolvido",
+      "rejected": "Rejeitado"
+    },
+    "detail": {
+      "backLink": "← Voltar para a vitrine",
+      "closedBanner": "✓ Este pedido já foi resolvido — obrigado à comunidade!",
+      "publishedBy": "Publicado por {author} · {date}",
+      "expressInterest": "Manifestar interesse",
+      "expressingInterest": "Registrando interesse…",
+      "toastInterestRegistered": "Interesse registrado! O autor foi notificado.",
+      "contactRevealed": "Contato revelado — você pode continuar a conversa fora da plataforma.",
+      "contactMethodLabel": {
+        "phone": "Telefone",
+        "whatsapp": "WhatsApp",
+        "email": "Email"
+      },
+      "continueOnWhatsApp": "Continuar no WhatsApp →",
+      "errors": {
+        "unauthenticated": "Você precisa entrar para manifestar interesse.",
+        "unavailable": "Este pedido não está mais disponível.",
+        "duplicate": "Você já manifestou interesse neste pedido.",
+        "generic": "Não foi possível registrar seu interesse. Tente novamente."
+      },
+      "gallery": {
+        "previous": "Foto anterior",
+        "next": "Próxima foto",
+        "goToPhoto": "Ver foto {number}"
+      }
+    },
+    "createForm": {
+      "heading": "Publicar pedido ou oferta",
+      "subtitle": "Seu post fica visível na vitrine depois de aprovado por um moderador.",
+      "typeLabel": "Tipo",
+      "typeOptions": {
+        "request": "Pedido (preciso de algo)",
+        "offer": "Oferta (posso ajudar)"
+      },
+      "categoryLabel": "Categoria",
+      "photoLabel": "Foto (opcional)",
+      "photoHint": "Você pode adicionar até {max} fotos (JPEG, PNG ou WebP, até 5MB cada).",
+      "photoUploading": "Enviando fotos…",
+      "photoRemove": "Remover foto",
+      "titleLabel": "Título",
+      "titlePlaceholder": "Ex: Preciso de voluntários para servir refeições",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "Explique o que você precisa ou o que pode oferecer, quando, e quaisquer detalhes úteis.",
+      "contactMethodLabel": "Contato preferido",
+      "contactValueLabel": "Contato",
+      "contactValuePlaceholder": "912 345 678",
+      "consentLabel": "Autorizo a Casa da Cidade a guardar e compartilhar meu contato com pessoas interessadas neste post, de acordo com a política de privacidade.",
+      "submit": "Enviar para aprovação",
+      "submitting": "Enviando…",
+      "toastSuccess": "Post enviado para aprovação.",
+      "errors": {
+        "invalidInput": "Verifique os dados informados e tente novamente.",
+        "uploadInvalidType": "Só são aceitas imagens JPEG, PNG ou WebP.",
+        "uploadTooLarge": "Cada foto deve ter no máximo 5MB.",
+        "uploadGeneric": "Não foi possível enviar a foto. Tente novamente.",
+        "generic": "Não foi possível enviar o post. Tente novamente."
+      }
+    }
+  },
+  "myPosts": {
+    "heading": "Meus posts",
+    "empty": "Você ainda não publicou nenhum pedido ou oferta.",
+    "interestCount": "{count, plural, =0 {Sem interesses ainda} one {# pessoa interessada} other {# pessoas interessadas}}",
+    "actions": {
+      "markResolved": "Marcar como resolvido",
+      "reopen": "Reabrir",
+      "view": "Ver"
+    },
+    "toastClosed": "Post marcado como resolvido.",
+    "toastReopened": "Post reaberto.",
+    "errors": {
+      "generic": "Não foi possível concluir a ação. Tente novamente."
+    }
+  },
+  "moderation": {
+    "title": "Fila de moderação",
+    "comingSoon": "Em breve.",
+    "description": "Esta área é restrita a moderadores e administradores.",
+    "countSubtitle": "{count, plural, one {# post aguardando aprovação} other {# posts aguardando aprovação}}",
+    "empty": "Fila limpa — sem posts aguardando aprovação. ✓",
+    "byline": "Por {author} · {date}",
+    "approve": "Aprovar",
+    "reject": "Rejeitar",
+    "reasonLabel": "Motivo da rejeição",
+    "reasonPlaceholder": "Explique por que este post está sendo rejeitado…",
+    "confirmReject": "Confirmar rejeição",
+    "rejecting": "Rejeitando…",
+    "cancel": "Cancelar",
+    "toastApproved": "Post aprovado e publicado na vitrine.",
+    "toastRejected": "Post rejeitado.",
+    "errors": {
+      "unauthorized": "Você não tem permissão para executar esta ação.",
+      "invalidTransition": "Este post já foi processado por outro moderador.",
+      "reasonRequired": "É necessário informar um motivo para rejeitar.",
+      "generic": "Não foi possível concluir a ação. Tente novamente."
+    }
+  },
+  "auth": {
+    "signUp": {
+      "title": "Criar conta",
+      "heading": "Criar conta",
+      "subtitle": "Junte-se à comunidade e comece a publicar pedidos e ofertas.",
+      "displayNameLabel": "Nome",
+      "emailLabel": "Email",
+      "passwordLabel": "Senha",
+      "confirmPasswordLabel": "Confirmar senha",
+      "consentLabel": "Aceito os Termos e a Política de Privacidade",
+      "submit": "Criar conta",
+      "submitting": "Criando conta…",
+      "haveAccount": "Já tem conta?",
+      "signInLink": "Entrar",
+      "success": "Conta criada com sucesso. Você já pode entrar.",
+      "errors": {
+        "passwordMismatch": "As senhas não coincidem.",
+        "consentRequired": "É necessário aceitar os Termos e a Política de Privacidade.",
+        "emailTaken": "Já existe uma conta com este email.",
+        "passwordTooShort": "A senha deve ter pelo menos 8 caracteres.",
+        "invalidInput": "Verifique os dados informados e tente novamente.",
+        "generic": "Não foi possível criar a conta. Tente novamente."
+      }
+    },
+    "signIn": {
+      "title": "Entrar",
+      "heading": "Bem-vindo de volta",
+      "subtitle": "Entre para publicar ou responder a pedidos.",
+      "emailLabel": "Email",
+      "passwordLabel": "Senha",
+      "submit": "Entrar",
+      "submitting": "Entrando…",
+      "noAccount": "Ainda não tem conta?",
+      "signUpLink": "Criar conta",
+      "errors": {
+        "invalidCredentials": "Email ou senha incorretos.",
+        "generic": "Não foi possível entrar. Tente novamente."
+      }
+    }
+  }
+}

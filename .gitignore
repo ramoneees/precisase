@@ -34,3 +34,10 @@ coverage/
 # Local secrets / scratch
 *.local
 tmp/
+
+/src/generated/prisma
+
+# User-uploaded post photos (local dev) — see src/app/api/uploads/route.ts.
+# KNOWN LIMITATION: in Docker/production this directory is not a persistent
+# volume (public/ is baked into the image), so this is dev-only for now.
+/public/uploads/

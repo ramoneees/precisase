@@ -1,0 +1,179 @@
+{
+  "nav": {
+    "brand": "Precisa-se",
+    "home": "Home",
+    "publish": "Post",
+    "myPosts": "My posts",
+    "moderation": "Moderation",
+    "signIn": "Sign in"
+  },
+  "listing": {
+    "title": "The community shop window",
+    "subtitle": "Volunteering and donation requests and offers within Casa da Cidade. Find who needs help — or who can give it.",
+    "searchPlaceholder": "Search by title or description…",
+    "search": "Search",
+    "filters": {
+      "allCategories": "All categories",
+      "allTypes": "All",
+      "requests": "Requests",
+      "offers": "Offers"
+    },
+    "resultsCount": "{count, plural, one {# active post} other {# active posts}}",
+    "empty": {
+      "title": "No results",
+      "description": "Try a different search or remove filters."
+    }
+  },
+  "category": {
+    "volunteering": "Volunteering",
+    "donation": "Donation"
+  },
+  "post": {
+    "type": {
+      "request": "Request",
+      "offer": "Offer"
+    },
+    "status": {
+      "pending": "Pending",
+      "active": "Active",
+      "closed": "Resolved",
+      "rejected": "Rejected"
+    },
+    "detail": {
+      "backLink": "← Back to the shop window",
+      "closedBanner": "✓ This request has already been resolved — thank you to the community!",
+      "publishedBy": "Posted by {author} · {date}",
+      "expressInterest": "Express interest",
+      "expressingInterest": "Registering interest…",
+      "toastInterestRegistered": "Interest registered! The author has been notified.",
+      "contactRevealed": "Contact revealed — you can continue the conversation off-platform.",
+      "contactMethodLabel": {
+        "phone": "Phone",
+        "whatsapp": "WhatsApp",
+        "email": "Email"
+      },
+      "continueOnWhatsApp": "Continue on WhatsApp →",
+      "errors": {
+        "unauthenticated": "You need to sign in to express interest.",
+        "unavailable": "This request is no longer available.",
+        "duplicate": "You've already expressed interest in this request.",
+        "generic": "Could not register your interest. Please try again."
+      },
+      "gallery": {
+        "previous": "Previous photo",
+        "next": "Next photo",
+        "goToPhoto": "View photo {number}"
+      }
+    },
+    "createForm": {
+      "heading": "Publish a request or an offer",
+      "subtitle": "Your post becomes visible in the shop window once a moderator approves it.",
+      "typeLabel": "Type",
+      "typeOptions": {
+        "request": "Request (I need something)",
+        "offer": "Offer (I can help)"
+      },
+      "categoryLabel": "Category",
+      "photoLabel": "Photo (optional)",
+      "photoHint": "You can add up to {max} photos (JPEG, PNG or WebP, up to 5MB each).",
+      "photoUploading": "Uploading photos…",
+      "photoRemove": "Remove photo",
+      "titleLabel": "Title",
+      "titlePlaceholder": "E.g. Need volunteers to serve meals",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Explain what you need or what you can offer, when, and any useful details.",
+      "contactMethodLabel": "Preferred contact",
+      "contactValueLabel": "Contact",
+      "contactValuePlaceholder": "912 345 678",
+      "consentLabel": "I authorize Casa da Cidade to store and share my contact with people interested in this post, in accordance with the privacy policy.",
+      "submit": "Submit for approval",
+      "submitting": "Submitting…",
+      "toastSuccess": "Post submitted for approval.",
+      "errors": {
+        "invalidInput": "Please check the fields and try again.",
+        "uploadInvalidType": "Only JPEG, PNG or WebP images are accepted.",
+        "uploadTooLarge": "Each photo must be at most 5MB.",
+        "uploadGeneric": "Could not upload the photo. Please try again.",
+        "generic": "Could not submit the post. Please try again."
+      }
+    }
+  },
+  "myPosts": {
+    "heading": "My posts",
+    "empty": "You haven't published any requests or offers yet.",
+    "interestCount": "{count, plural, =0 {No interest yet} one {# person interested} other {# people interested}}",
+    "actions": {
+      "markResolved": "Mark as resolved",
+      "reopen": "Reopen",
+      "view": "View"
+    },
+    "toastClosed": "Post marked as resolved.",
+    "toastReopened": "Post reopened.",
+    "errors": {
+      "generic": "Could not complete the action. Please try again."
+    }
+  },
+  "moderation": {
+    "title": "Moderation queue",
+    "comingSoon": "Coming soon.",
+    "description": "This area is restricted to moderators and administrators.",
+    "countSubtitle": "{count, plural, one {# post awaiting approval} other {# posts awaiting approval}}",
+    "empty": "Queue clear — no posts awaiting approval. ✓",
+    "byline": "By {author} · {date}",
+    "approve": "Approve",
+    "reject": "Reject",
+    "reasonLabel": "Rejection reason",
+    "reasonPlaceholder": "Explain why this post is being rejected…",
+    "confirmReject": "Confirm rejection",
+    "rejecting": "Rejecting…",
+    "cancel": "Cancel",
+    "toastApproved": "Post approved and published to the shop window.",
+    "toastRejected": "Post rejected.",
+    "errors": {
+      "unauthorized": "You don't have permission to perform this action.",
+      "invalidTransition": "This post has already been processed by another moderator.",
+      "reasonRequired": "A reason is required to reject a post.",
+      "generic": "Could not complete the action. Please try again."
+    }
+  },
+  "auth": {
+    "signUp": {
+      "title": "Create account",
+      "heading": "Create account",
+      "subtitle": "Join the community and start posting requests and offers.",
+      "displayNameLabel": "Name",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "confirmPasswordLabel": "Confirm password",
+      "consentLabel": "I accept the Terms and the Privacy Policy",
+      "submit": "Create account",
+      "submitting": "Creating account…",
+      "haveAccount": "Already have an account?",
+      "signInLink": "Sign in",
+      "success": "Account created successfully. You can now sign in.",
+      "errors": {
+        "passwordMismatch": "Passwords do not match.",
+        "consentRequired": "You must accept the Terms and the Privacy Policy.",
+        "emailTaken": "An account with this email already exists.",
+        "passwordTooShort": "Password must be at least 8 characters long.",
+        "invalidInput": "Please check the fields and try again.",
+        "generic": "Could not create the account. Please try again."
+      }
+    },
+    "signIn": {
+      "title": "Sign in",
+      "heading": "Welcome back",
+      "subtitle": "Sign in to post or respond to requests.",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "noAccount": "Don't have an account yet?",
+      "signUpLink": "Create account",
+      "errors": {
+        "invalidCredentials": "Incorrect email or password.",
+        "generic": "Could not sign in. Please try again."
+      }
+    }
+  }
+}
