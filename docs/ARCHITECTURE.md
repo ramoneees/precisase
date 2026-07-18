@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — "Precisa-se" (Casa da Cidade Community Platform)
 
-> **Status:** DRAFT v0.1 — for stakeholder review.
+> **Status:** DRAFT v0.2 — for stakeholder review.
 > **Last updated:** 2026-07-12.
 > **Audience:** project team (Ramon, Tiago, Rafaela, Rui, Gabriel, Rafael Santos) + implementing agents/LLMs.
 > **How to propose changes:** open a discussion at the next alignment meeting, then edit this file and bump the version. Mark anything contested with `Open question:` so unresolved items stay visible.
@@ -126,9 +126,10 @@ Each layer below lists the **recommended** option, the **runner-up**, and the **
 - **Open question Q2:** managed Postgres (e.g., a small cloud instance) vs. self-hosted in Docker. Recommendation: self-host in Docker on Ramon's server for MVP (cost), revisit at migration.
 
 ### 4.4 Authentication & authorization
-- **Recommended:** **Auth.js (NextAuth v5)** with a **credentials provider**, **argon2id** password hashing, and a **role enum** (`user`, `moderator`, `admin`).
+- **Recommended:** **Auth.js (NextAuth v5)** with a **credentials provider**, **argon2id** password hashing, and a **role enum** (`user`, `moderator`, `admin`, `service`).
 - **Runner-up:** Hosted/OIDC provider — Keycloak, Authentik, Clerk, or Supabase Auth.
 - **Why:** Self-hosting keeps data inside the church's trust boundary and avoids per-seat SaaS costs. argon2id is the current OWASP-recommended password hash. Auth.js gives session cookies, CSRF protection, and Route-Handler-friendly middleware out of the box.
+- **Machine clients (bot / agents / 3rd-party):** authenticated by a separate **service-token scheme** (long-lived bearer tokens in `Authorization: Bearer <token>`), validated in middleware alongside the cookie path. A `service` role marks these actors; fine-grained capability is encoded as **scopes** on the `ApiKey` row (§5.1). See §4.9 for the full external-API design.
 - **Open question Q3:** self-hosted Auth.js (recommended, lower cost, data stays in-house) vs. hosted provider (less to operate, but introduces an external dependency and possible cost).
 - **Open question Q4:** MFA for moderator/admin accounts (recommended yes — moderators are the highest-value accounts). Implementation: TOTP via `otplib`.
 
@@ -153,6 +154,35 @@ Each layer below lists the **recommended** option, the **runner-up**, and the **
 ### 4.8 Observability
 - **Recommended:** **Sentry** for error tracking (frontend + backend), **structured JSON logs** to stdout (captured by Docker), and a `/health` endpoint that pings the DB and worker liveness.
 - **Why:** Sentry's free tier covers MVP volume. Structured logs are greppable and ship-to-anything later. `/health` is the minimum for any orchestrator or uptime check.
+
+### 4.9 External API (bot / agent / 3rd-party readiness)
+- **Recommended:** a **versioned REST surface at `/api/v1/*`** layered on top of the same Next.js Route Handlers and service layer the UI already uses, plus a **service-token (API-key) auth scheme** for machine clients.
+- **Runner-up:** GraphQL (overkill for MVP — one client shape); an entirely separate backend service (rejected: breaks the single-deployable invariant, §3.1).
+- **Why:** the WhatsApp bot (phase 2), AI agents such as Hermes, and eventual 3rd-party tools all need a programmatic contract. Building it as a versioned namespace *on the same app* gives us a public API for free — no second codebase, no second runtime to operate, no duplicated business rules. The shop-window and moderation invariants (R1, BR01) stay enforced in the service layer regardless of caller.
+- **Scope of v1 (MVP-aligned):**
+    - `GET /api/v1/posts` — list/search active posts (shop window, FR06–FR08).
+    - `GET /api/v1/posts/{id}` — read a single post.
+    - `POST /api/v1/posts` — create a post (always `pending`; moderation still required, BR01).
+    - `POST /api/v1/posts/{id}/interest` — express interest (triggers contact reveal + author notification, FR09).
+    - `GET /api/v1/categories` — list categories.
+    - Webhook-style: `POST /api/v1/webhooks/post-status` — opt-in callbacks for post state changes (§5.3), so agents/Hermes can react without polling.
+- **Auth model (dual-path, unified RBAC):**
+    - **Browser UI** → Auth.js session cookie (existing, §4.4).
+    - **Machine clients (bot, Hermes, 3rd-party)** → `Authorization: Bearer <service-token>`; token maps to an `ApiKey` row with a `service` role + **scopes** (`post:read`, `post:write`, `interest:create`, `webhook:subscribe`).
+    - **Middleware** accepts either credential, resolves a single `authContext` (`{ kind: 'user'|'service', actor_id, role, scopes }`). RBAC and invariant checks in the service layer (§7.2) are identical for both paths — defense in depth does not depend on the caller being a browser.
+- **Operational hardening:**
+    - **Versioning:** `/api/v1/*` is a frozen contract; breaking changes go to `/api/v2/*`. UI-internal handlers (no `v1` prefix) may drift freely.
+    - **Rate limiting:** per-token limits at the edge (Cloudflare) and/or in middleware; bot/agent tokens get their own tier. (Open question Q18.)
+    - **Idempotency:** `POST /posts` and `POST /interest` accept an `Idempotency-Key` header to make retries safe for agents.
+    - **OpenAPI spec** generated from the v1 handlers; published at `/api/v1/openapi.json` and a developer-facing docs page. This is what an agent framework or 3rd-party integrator points at.
+    - **Auditability:** every v1 write creates an `AuditLog` row with `actor_api_key_id` populated (§5.1, §7.6), so machine-driven actions are never anonymous.
+- **Hard invariants preserved regardless of caller:**
+    - R1 (shop window): contact info is revealed **only** via `POST /interest`. A bot or agent may *create* or *list* posts, but never broker contact inline — it must deep-link the user to the platform. Enforced in `InterestService`, not in the caller.
+    - BR01 (moderation): a service-created post is still `pending` until a human moderator approves it. No "trusted bot bypass" in MVP.
+    - NFR03 (i18n): API responses are locale-neutral; localized strings are keyed (`category.volunteering`) so any client renders in its own locale.
+- **Phase-2 features that slot in unchanged:** the Hermes agent and WhatsApp bot use the same v1 endpoints as a future 3rd-party partner; the only difference is which `ApiKey` + scopes they hold. No new data model, no new service.
+- **Open question Q18:** rate-limit policy and quota per API key (defaults + paid tier for 3rd-party?).
+- **Open question Q19:** is a public, unauthenticated read of the shop window via `/api/v1/posts` acceptable (consistent with Q15's anonymous-browsing assumption), or must every API read carry a token?
 
 ---
 
@@ -260,6 +290,7 @@ The latest ModerationAction per Post wins (BR02). This is an **append-only audit
 |---|---|---|---|
 | id | uuid | PK | |
 | actor_id | uuid | FK→User, nullable | nullable for system actions |
+| actor_api_key_id | uuid | FK→ApiKey, nullable | set when the actor is a machine client (§4.9); mutually exclusive with `actor_id` for non-system rows |
 | action | text | not null | e.g. `post.create`, `user.gdpr_delete` |
 | target_type | text | not null | e.g. `Post`, `User` |
 | target_id | uuid | nullable | |
@@ -268,6 +299,22 @@ The latest ModerationAction per Post wins (BR02). This is an **append-only audit
 | ip | inet | nullable | |
 | user_agent | text | nullable | |
 | created_at | timestamptz | not null | |
+
+#### ApiKey
+Machine-client credentials for the external API (§4.9). One row per bot, agent (e.g. Hermes), or 3rd-party integration.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| id | uuid | PK | |
+| name | text | not null | human label, e.g. `hermes-agent`, `whatsapp-bot`, `partner-acme` |
+| hashed_token | text | unique, not null | argon2id hash of the bearer token; raw token shown once at creation |
+| prefix | text | not null | first 8 chars of raw token, for display/lookup without hashing |
+| role | enum(`service`) | not null, default `service` | machine actors are always `service` (§4.4) |
+| scopes | text[] | not null, default `'{}'` | e.g. `{post:read, post:write, interest:create, webhook:subscribe}` |
+| created_by | uuid | FK→User, not null | the admin who minted it |
+| last_used_at | timestamptz | nullable | updated on successful auth |
+| revoked_at | timestamptz | nullable | soft-revoke; non-null means rejected |
+| created_at / updated_at | timestamptz | not null | |
 
 ### 5.2 Relationships
 
@@ -279,6 +326,8 @@ erDiagram
     User ||--o{ ConsentRecord : owns
     User ||--o{ Notification : receives
     User ||--o{ AuditLog : "actor of"
+    User ||--o{ ApiKey : "creates (admin)"
+    ApiKey ||--o{ AuditLog : "actor of (machine)"
     Category ||--o{ Post : classifies
     Post ||--o{ Interest : attracts
     Post ||--o{ ModerationAction : moderated by
@@ -526,8 +575,10 @@ services:
 |---|---|---|
 | **Jobs/recruitment** | New `Category` row `jobs` + optional `extra_attributes` validator | 1 seed row + 1 i18n key + (optional) form-specific UI; data model untouched (BR05) |
 | **Golden Plus reputation** | New `ReputationScore` table; service rule: high-score authors skip `pending` | 1 table + a check in `PostService.createPost`; no schema restructure |
-| **WhatsApp bot** | Bot calls existing Route Handlers with a service-account role | New auth flow only; Posts/Interests unchanged. **Invariant:** bot deep-links to the platform, never brokers contact inline (R1) |
-| **Church-app unification** | Expose Route Handlers as a versioned API the church app can call | Add an API auth scheme (e.g., service tokens); data model unchanged |
+| **WhatsApp bot** | Bot calls `/api/v1/*` (§4.9) with its own `ApiKey` (`service` role + scopes) | No new data model — uses existing ApiKey/external-API design. **Invariant:** bot deep-links to the platform, never brokers contact inline (R1) |
+| **AI agents (e.g. Hermes)** | Same `/api/v1/*` surface as WhatsApp bot; per-agent `ApiKey` + scopes | Zero new infrastructure; one ApiKey row per agent |
+| **3rd-party tools / partners** | Same `/api/v1/*` surface; partner `ApiKey` with narrower scopes | Zero new infrastructure; rate-limited per Q18 |
+| **Church-app unification** | Church app calls `/api/v1/*` (§4.9) with a service token | Already designed — no additional auth scheme to invent |
 | **Auto-translation of posts** | Background job translates `Post.title`/`description`, stores in a `PostTranslation` table | New table; shop-window falls back to original on miss |
 
 The architecture is intentionally **boring and additive**: each phase-2 feature is one new table or one new role, not a rewrite.
@@ -555,6 +606,8 @@ These are the decisions still required from the team. The implementing agent mus
 - **Q15** — Anonymous browsing of the shop window vs. login-required? Draft assumes **anonymous browsing, login to act** — confirm.
 - **Q16** — Should interested users see the author's contact immediately, or only after the author accepts the interest? Draft assumes immediately (lower friction, FR09). Revisit if spam appears.
 - **Q17** — Image attachments for posts (e.g., photos of donated items)? Not in MVP scope; `Assumption:` text-only for v0.1.
+- **Q18** — External API rate-limit policy and quota per `ApiKey` (defaults for bot/agent tier vs. potential paid tier for 3rd-party partners). (§4.9)
+- **Q19** — Is unauthenticated read of `/api/v1/posts` acceptable (consistent with the Q15 anonymous-browsing assumption), or must every API call — including reads — carry a service token? (§4.9)
 
 ---
 
