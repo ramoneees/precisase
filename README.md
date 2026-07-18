@@ -67,9 +67,11 @@ A plataforma nasce de uma experiência anterior (`voluntariado.casadacidade.com`
 - [x] Rascunho de arquitetura em `docs/ARCHITECTURE.md`
 - [ ] Diagrama/fluxo do lifecycle de uma "necessidade" (Tiago)
 - [ ] Validação dos requisitos pela equipa (Ramon)
-- [ ] Resposta às perguntas em aberto Q1–Q17
+- [ ] Resposta às perguntas em aberto Q1–Q19
 - [ ] Reunião de alinhamento com diagrama + requisitos consolidados
-- [ ] Início da implementação
+- [x] Início da implementação — scaffold Next.js (App Router, TypeScript, Tailwind, next-intl) com testes (Vitest); schema Prisma e infraestrutura Docker em curso
+
+> Nota: a implementação começou em paralelo com a validação dos requisitos, a pedido de Ramon. As perguntas em aberto (Q1–Q19) continuam por resolver — o código segue as recomendações por defeito do `ARCHITECTURE.md` até serem confirmadas ou revistas pela equipa.
 
 ---
 
