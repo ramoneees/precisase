@@ -90,9 +90,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 COPY --from=builder --chown=nextjs:nodejs /app/messages ./messages
 COPY --from=builder --chown=nextjs:nodejs /app/src ./src
-# schema.prisma + migrations/ — required by `prisma migrate deploy`, run as
-# an initContainer before the web/worker processes start (see k8s manifests).
+# schema.prisma + migrations/, plus prisma.config.ts (holds datasource.url
+# for Prisma 7 — required by `prisma migrate deploy`, run as an
+# initContainer before the web/worker processes start; see k8s manifests).
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 USER nextjs
 EXPOSE 3000
