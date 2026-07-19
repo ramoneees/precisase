@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { LanguageSwitcher } from "./language-switcher";
+import { signOutAction } from "./sign-out-action";
 
 /**
  * Shared sticky header, used from the root `[locale]/layout.tsx` so every
@@ -55,14 +56,24 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
         <LanguageSwitcher />
 
         {session?.user ? (
-          <Link
-            href="/profile"
-            aria-label={t("myAccount")}
-            title={displayName ?? t("myAccount")}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F0EA] text-sm font-semibold text-[#2F6B4F] hover:opacity-80"
-          >
-            {getInitials(displayName)}
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/profile"
+              aria-label={t("myAccount")}
+              title={displayName ?? t("myAccount")}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F0EA] text-sm font-semibold text-[#2F6B4F] hover:opacity-80"
+            >
+              {getInitials(displayName)}
+            </Link>
+            <form action={signOutAction.bind(null, locale)}>
+              <button
+                type="submit"
+                className="shrink-0 rounded-full border border-[#E3DED2] px-3 py-1.5 text-sm font-medium text-[#232922] hover:bg-[#F5F2EA]"
+              >
+                {t("signOut")}
+              </button>
+            </form>
+          </div>
         ) : (
           <Link
             href="/signin"
