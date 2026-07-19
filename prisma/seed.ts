@@ -332,10 +332,7 @@ async function main(): Promise<void> {
       const categoryId = categoryIdBySlug.get(p.categorySlug);
       if (!categoryId) throw new Error(`category ${p.categorySlug} missing`);
 
-      const isPhone = p.contactMethod === "phone" || p.contactMethod === "whatsapp";
-      const encryptedContact = isPhone
-        ? new Uint8Array(await encryptPhone(p.contactValue))
-        : Buffer.from(p.contactValue, "utf8");
+      const encryptedContact = new Uint8Array(await encrypt(p.contactValue));
 
       await prisma.post.create({
         data: {
