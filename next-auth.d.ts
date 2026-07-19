@@ -23,6 +23,13 @@ declare module "next-auth" {
     timeZone?: string | null;
     /** ISO 4217 currency code (e.g. "EUR"), or null if not yet set. */
     currency?: string | null;
+    /**
+     * ISO string timestamp of when TOTP MFA was enabled, or null if the
+     * user hasn't enrolled. JSON-serializable (JWT/session values can't
+     * carry a `Date`) — see `src/server/services/mfa-service.ts`. Never
+     * carries the TOTP secret itself; that never leaves the server.
+     */
+    mfaEnabledAt?: string | null;
   }
 
   interface Session {
@@ -32,6 +39,7 @@ declare module "next-auth" {
       country?: string | null;
       timeZone?: string | null;
       currency?: string | null;
+      mfaEnabledAt?: string | null;
     } & DefaultSession["user"];
   }
 }

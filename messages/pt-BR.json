@@ -74,6 +74,9 @@
         "goToPhoto": "Ver foto {number}"
       }
     },
+    "anon": {
+      "signInToExpressInterest": "Entre para manifestar interesse"
+    },
     "createForm": {
       "heading": "Publicar pedido ou oferta",
       "subtitle": "Seu post fica visível na vitrine depois de aprovado por um moderador.",
@@ -215,9 +218,89 @@
       "submitting": "Entrando…",
       "noAccount": "Ainda não tem conta?",
       "signUpLink": "Criar conta",
+      "forgotPasswordLink": "Esqueceu sua senha?",
+      "resetSuccess": "Sua senha foi redefinida. Você já pode entrar.",
       "errors": {
         "invalidCredentials": "Email ou senha incorretos.",
         "generic": "Não foi possível entrar. Tente novamente."
+      }
+    },
+    "forgotPassword": {
+      "title": "Recuperar senha",
+      "heading": "Esqueceu sua senha?",
+      "subtitle": "Informe seu email e enviaremos um link para redefini-la.",
+      "emailLabel": "Email",
+      "submit": "Enviar link de redefinição",
+      "submitting": "Enviando…",
+      "successMessage": "Se esse email estiver cadastrado, enviamos um link para você redefinir sua senha.",
+      "backToSignIn": "Voltar para o login",
+      "errors": {
+        "generic": "Algo deu errado. Tente novamente."
+      }
+    },
+    "resetPassword": {
+      "title": "Redefinir senha",
+      "heading": "Escolha uma nova senha",
+      "subtitle": "Informe uma nova senha para sua conta.",
+      "newPasswordLabel": "Nova senha",
+      "confirmPasswordLabel": "Confirmar nova senha",
+      "submit": "Redefinir senha",
+      "submitting": "Redefinindo…",
+      "errors": {
+        "invalidToken": "Este link de redefinição é inválido ou expirou. Solicite um novo.",
+        "weakPassword": "A senha deve ter pelo menos 8 caracteres.",
+        "passwordMismatch": "As senhas não coincidem.",
+        "generic": "Não foi possível redefinir sua senha. Tente novamente."
+      }
+    },
+    "anon": {
+      "signInToAct": "Entre para continuar",
+      "signInToContact": "Entre para ver o contato",
+      "signInToBrowse": "Entre para manifestar interesse"
+    },
+    "mfa": {
+      "challenge": {
+        "title": "Autenticação de dois fatores",
+        "heading": "Digite seu código de verificação",
+        "subtitle": "Confirme sua senha e o código de 6 dígitos do seu aplicativo autenticador.",
+        "emailLabel": "Email",
+        "passwordLabel": "Senha",
+        "codeLabel": "Código de 6 dígitos",
+        "submit": "Verificar e entrar",
+        "submitting": "Verificando…",
+        "errors": {
+          "invalidCredentials": "Código ou senha inválidos.",
+          "generic": "Não foi possível entrar. Tente novamente."
+        }
+      },
+      "setup": {
+        "title": "Autenticação de dois fatores",
+        "heading": "Autenticação de dois fatores",
+        "subtitle": "Adicione uma camada extra de segurança com um código temporário de um aplicativo autenticador.",
+        "enrollButton": "Configurar autenticação de dois fatores",
+        "scanQrInstructions": "Escaneie este QR code com um aplicativo autenticador (Google Authenticator, 1Password, …) e depois digite o código de 6 dígitos que ele exibe.",
+        "secretFallbackLabel": "Ou digite este código manualmente:",
+        "codeLabel": "Código de 6 dígitos",
+        "verifyButton": "Verificar e ativar",
+        "verifying": "Verificando…",
+        "enabledConfirmation": "A autenticação de dois fatores está ativada na sua conta.",
+        "disableButton": "Desativar autenticação de dois fatores",
+        "disableConfirmPrompt": "Digite sua senha para confirmar a desativação da autenticação de dois fatores.",
+        "disableConfirmYes": "Desativar",
+        "disableConfirmCancel": "Cancelar",
+        "passwordLabel": "Senha",
+        "forcedBanner": "A autenticação de dois fatores agora é obrigatória para o seu perfil. Configure-a para continuar.",
+        "errors": {
+          "invalidToken": "Esse código é inválido ou expirou. Tente novamente.",
+          "notEnrolled": "Recomece a configuração para gerar um novo código.",
+          "invalidPassword": "Senha incorreta.",
+          "generic": "Algo deu errado. Tente novamente."
+        }
+      },
+      "warnBanner": {
+        "message": "Configure a autenticação de dois fatores para continuar moderando.",
+        "messageWithDate": "Configure a autenticação de dois fatores para continuar moderando — obrigatória a partir de {date}.",
+        "link": "Configurar agora"
       }
     }
   },
@@ -318,6 +401,10 @@
       "subject": "Alguém está interessado em \"{title}\"",
       "body": "Olá {name},\n\nAlguém manifestou interesse no seu post \"{title}\".{messageLine}\n\nVeja aqui: {link}\n\n— Precisa-se, Casa da Cidade",
       "messageLine": "\n\nMensagem: \"{message}\""
+    },
+    "passwordReset": {
+      "subject": "Redefinir sua senha",
+      "body": "Olá {displayName},\n\nRecebemos um pedido para redefinir sua senha. Este link é válido por 1 hora.\n\nRedefina sua senha aqui: {resetUrl}\n\nSe você não solicitou isso, pode ignorar este e-mail.\n\n— Precisa-se, Casa da Cidade"
     }
   }
 }

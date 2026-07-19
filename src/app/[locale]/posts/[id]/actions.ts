@@ -9,7 +9,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
+import { getAuthContext } from "@/server/auth/auth-context";
 import { interestService } from "@/server/service-instances";
 import {
   DuplicateInterestError,
@@ -36,13 +36,13 @@ export async function expressInterestAction(
   postId: string,
   locale: string,
 ): Promise<ExpressInterestResult> {
-  const session = await auth();
-  if (!session?.user) {
+  const authContext = await getAuthContext();
+  if (authContext.kind === "anon") {
     return { ok: false, error: "unauthenticated" };
   }
 
   try {
-    await interestService.expressInterest({ postId, userId: session.user.id });
+    await interestService.expressInterest({ postId, userId: authContext.user.id });
   } catch (error) {
     if (error instanceof DuplicateInterestError) {
       return { ok: false, error: "duplicate" };

@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
@@ -24,8 +25,13 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
   const isModerator = role === "moderator" || role === "admin";
   const displayName = session?.user?.name ?? null;
 
+  // The MFA warn banner is driven by the `x-mfa-warn` header set in
+  // `proxy.ts` (T18) during the warn-only enforcement window.
+  const warnMfa = (await headers()).get("x-mfa-warn") === "1";
+
   return (
     <header className="sticky top-0 z-40 border-b border-[#E3DED2] bg-white">
+      {warnMfa ? <MfaWarnBanner locale={locale} /> : null}
       <nav className="mx-auto flex max-w-[1100px] items-center justify-between gap-4 px-6 py-3">
         <Link href="/" className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6B4F] font-heading text-sm font-extrabold text-white">
@@ -84,6 +90,36 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
         )}
       </nav>
     </header>
+  );
+}
+
+/**
+ * Warn-only MFA enrollment banner (T18). Rendered above the nav when
+ * `proxy.ts` flags a privileged account that hasn't enrolled yet. If
+ * `MFA_ENFORCE_BEGIN_AT` is set, the copy names the enforcement date;
+ * otherwise it's a generic prompt.
+ */
+async function MfaWarnBanner({ locale }: { locale: AppLocale }) {
+  const t = await getTranslations({ locale, namespace: "auth.mfa.warnBanner" });
+  const enforceBeginAt = process.env.MFA_ENFORCE_BEGIN_AT;
+  const enforceDate = enforceBeginAt ? new Date(enforceBeginAt) : null;
+  const hasValidDate = enforceDate !== null && !Number.isNaN(enforceDate.getTime());
+
+  const message = hasValidDate
+    ? t("messageWithDate", {
+        date: new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(enforceDate),
+      })
+    : t("message");
+
+  return (
+    <div className="border-b border-[#E3C77A] bg-[#FBF3D9]">
+      <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-2 px-6 py-2 text-sm text-[#7A5C10]">
+        <span>{message}</span>
+        <Link href="/account/mfa" className="font-semibold underline">
+          {t("link")}
+        </Link>
+      </div>
+    </div>
   );
 }
 

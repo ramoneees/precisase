@@ -32,6 +32,15 @@ export interface AuthUserRecord {
   currency: string | null;
   /** Soft-delete marker (§5.1) — a deleted user may never authenticate. */
   deletedAt: Date | null;
+  /**
+   * Decrypted TOTP secret (plaintext at this layer, same convention as
+   * `PostRecord.contactValue` — decryption happens only at the repository
+   * boundary), or `null` if MFA has never been enrolled/is pending. Never
+   * forwarded onto `AuthenticatedUser`.
+   */
+  mfaSecret: string | null;
+  /** Set once MFA enrollment is confirmed (see `MfaService.enableMfa`); `null` while unenrolled or pending. */
+  mfaEnabledAt: Date | null;
 }
 
 /**
@@ -57,7 +66,13 @@ export interface VerifyCredentialsInput {
   password: string;
 }
 
-/** The authenticated user, deliberately excluding `passwordHash`. */
+/**
+ * The authenticated user, deliberately excluding `passwordHash` — and,
+ * deliberately, `mfaSecret`. `mfaEnabledAt` is kept (a later wave's
+ * two-call sign-in flow branches on whether it's set to decide whether to
+ * challenge for a TOTP code); the raw secret must never leave this
+ * function's internal scope.
+ */
 export interface AuthenticatedUser {
   id: string;
   email: string;
@@ -66,6 +81,7 @@ export interface AuthenticatedUser {
   country: string | null;
   timeZone: string | null;
   currency: string | null;
+  mfaEnabledAt: Date | null;
 }
 
 /**
@@ -101,5 +117,6 @@ export async function verifyCredentials(
     country: user.country,
     timeZone: user.timeZone,
     currency: user.currency,
+    mfaEnabledAt: user.mfaEnabledAt,
   };
 }

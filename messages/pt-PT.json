@@ -74,6 +74,9 @@
         "goToPhoto": "Ver foto {number}"
       }
     },
+    "anon": {
+      "signInToExpressInterest": "Entra para manifestar interesse"
+    },
     "createForm": {
       "heading": "Publicar pedido ou oferta",
       "subtitle": "O teu post fica visível na montra depois de aprovado por um moderador.",
@@ -215,9 +218,89 @@
       "submitting": "A entrar…",
       "noAccount": "Ainda não tem conta?",
       "signUpLink": "Criar conta",
+      "forgotPasswordLink": "Esqueceu-se da palavra-passe?",
+      "resetSuccess": "A tua palavra-passe foi reposta. Já podes entrar.",
       "errors": {
         "invalidCredentials": "Email ou palavra-passe incorretos.",
         "generic": "Não foi possível entrar. Tente novamente."
+      }
+    },
+    "forgotPassword": {
+      "title": "Recuperar palavra-passe",
+      "heading": "Esqueceu-se da palavra-passe?",
+      "subtitle": "Indica o teu email e enviamos-te um link para a repores.",
+      "emailLabel": "Email",
+      "submit": "Enviar link de reposição",
+      "submitting": "A enviar…",
+      "successMessage": "Se esse email estiver registado, enviámos um link para repores a tua palavra-passe.",
+      "backToSignIn": "Voltar a entrar",
+      "errors": {
+        "generic": "Algo correu mal. Tente novamente."
+      }
+    },
+    "resetPassword": {
+      "title": "Repor palavra-passe",
+      "heading": "Escolhe uma nova palavra-passe",
+      "subtitle": "Indica uma nova palavra-passe para a tua conta.",
+      "newPasswordLabel": "Nova palavra-passe",
+      "confirmPasswordLabel": "Confirmar nova palavra-passe",
+      "submit": "Repor palavra-passe",
+      "submitting": "A repor…",
+      "errors": {
+        "invalidToken": "Este link de reposição é inválido ou já expirou. Pede um novo.",
+        "weakPassword": "A palavra-passe deve ter pelo menos 8 caracteres.",
+        "passwordMismatch": "As palavras-passe não coincidem.",
+        "generic": "Não foi possível repor a palavra-passe. Tente novamente."
+      }
+    },
+    "anon": {
+      "signInToAct": "Entra para continuar",
+      "signInToContact": "Entra para ver o contacto",
+      "signInToBrowse": "Entra para manifestar interesse"
+    },
+    "mfa": {
+      "challenge": {
+        "title": "Autenticação de dois fatores",
+        "heading": "Introduz o teu código de verificação",
+        "subtitle": "Confirma a tua palavra-passe e o código de 6 dígitos da tua aplicação de autenticação.",
+        "emailLabel": "Email",
+        "passwordLabel": "Palavra-passe",
+        "codeLabel": "Código de 6 dígitos",
+        "submit": "Verificar e entrar",
+        "submitting": "A verificar…",
+        "errors": {
+          "invalidCredentials": "Código ou palavra-passe inválidos.",
+          "generic": "Não foi possível entrar. Tenta novamente."
+        }
+      },
+      "setup": {
+        "title": "Autenticação de dois fatores",
+        "heading": "Autenticação de dois fatores",
+        "subtitle": "Acrescenta uma camada extra de segurança com um código temporário de uma aplicação de autenticação.",
+        "enrollButton": "Configurar a autenticação de dois fatores",
+        "scanQrInstructions": "Lê este código QR com uma aplicação de autenticação (Google Authenticator, 1Password, …) e introduz depois o código de 6 dígitos que ela mostra.",
+        "secretFallbackLabel": "Ou introduz este código manualmente:",
+        "codeLabel": "Código de 6 dígitos",
+        "verifyButton": "Verificar e ativar",
+        "verifying": "A verificar…",
+        "enabledConfirmation": "A autenticação de dois fatores está ativada na tua conta.",
+        "disableButton": "Desativar a autenticação de dois fatores",
+        "disableConfirmPrompt": "Introduz a tua palavra-passe para confirmar a desativação da autenticação de dois fatores.",
+        "disableConfirmYes": "Desativar",
+        "disableConfirmCancel": "Cancelar",
+        "passwordLabel": "Palavra-passe",
+        "forcedBanner": "A autenticação de dois fatores passou a ser obrigatória para o teu perfil. Configura-a para continuares.",
+        "errors": {
+          "invalidToken": "Esse código é inválido ou já expirou. Tenta novamente.",
+          "notEnrolled": "Recomeça a configuração para gerar um novo código.",
+          "invalidPassword": "Palavra-passe incorreta.",
+          "generic": "Algo correu mal. Tenta novamente."
+        }
+      },
+      "warnBanner": {
+        "message": "Configura a autenticação de dois fatores para continuares a moderar.",
+        "messageWithDate": "Configura a autenticação de dois fatores para continuares a moderar — obrigatória a partir de {date}.",
+        "link": "Configurar agora"
       }
     }
   },
@@ -318,6 +401,10 @@
       "subject": "Alguém está interessado em \"{title}\"",
       "body": "Olá {name},\n\nAlguém manifestou interesse no teu post \"{title}\".{messageLine}\n\nVê aqui: {link}\n\n— Precisa-se, Casa da Cidade",
       "messageLine": "\n\nMensagem: \"{message}\""
+    },
+    "passwordReset": {
+      "subject": "Repor a tua palavra-passe",
+      "body": "Olá {displayName},\n\nRecebemos um pedido para repor a tua palavra-passe. Este link é válido durante 1 hora.\n\nRepõe a tua palavra-passe aqui: {resetUrl}\n\nSe não pediste isto, podes ignorar este email.\n\n— Precisa-se, Casa da Cidade"
     }
   }
 }

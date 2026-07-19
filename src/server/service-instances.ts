@@ -18,6 +18,10 @@ import { PrismaInterestRepository } from "@/server/repositories/prisma-interest-
 import { AccountDeletionService } from "@/server/services/account-deletion-service";
 import { PrismaAccountDeletionRepository } from "@/server/repositories/prisma-account-deletion-repository";
 import { PasswordService } from "@/server/services/password-service";
+import { PasswordResetService } from "@/server/services/password-reset-service";
+import { PrismaPasswordResetRepository } from "@/server/repositories/prisma-password-reset-repository";
+import { MfaService } from "@/server/services/mfa-service";
+import { PrismaMfaRepository } from "@/server/repositories/prisma-mfa-repository";
 
 export const postService = new PostService(new PrismaPostRepository());
 export const interestService = new InterestService(new PrismaInterestRepository());
@@ -28,3 +32,10 @@ export const accountDeletionService = new AccountDeletionService(
   passwordService,
   passwordService,
 );
+
+export const passwordResetService = new PasswordResetService(
+  new PrismaPasswordResetRepository(),
+  passwordService,
+);
+
+export const mfaService = new MfaService(new PrismaMfaRepository(), passwordService);

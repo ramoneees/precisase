@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { signin, type SigninErrorCode } from "./actions";
 
 /**
@@ -11,6 +12,9 @@ import { signin, type SigninErrorCode } from "./actions";
  */
 export function SigninForm() {
   const t = useTranslations("auth.signIn");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,10 +26,24 @@ export function SigninForm() {
     setError(null);
 
     startTransition(async () => {
-      const result = await signin({ email, password });
-      if (!result.ok) {
-        setError(result.error);
+      const result = await signin({
+        email,
+        password,
+        ...(callbackUrl ? { callbackUrl } : {}),
+      });
+      if (result.ok) {
+        return;
       }
+      if ("mfaRequired" in result) {
+        // Step 2 of the two-call flow: hand off to the MFA challenge screen,
+        // which re-collects the password + the TOTP code (stateless design —
+        // no server-side pending session).
+        const params = new URLSearchParams({ email: result.email });
+        params.set("callbackUrl", callbackUrl ?? "/");
+        router.push(`/signin/mfa-challenge?${params.toString()}`);
+        return;
+      }
+      setError(result.error);
     });
   }
 
@@ -66,6 +84,12 @@ export function SigninForm() {
           className="rounded-xl border border-[#E3DED2] bg-white px-3.5 py-2.5 text-sm text-[#232922] focus:border-[#2F6B4F] focus:outline-none"
         />
       </div>
+
+      <p className="-mt-2 text-right text-sm">
+        <Link href="/forgot-password" className="font-medium text-[#2F6B4F] underline">
+          {t("forgotPasswordLink")}
+        </Link>
+      </p>
 
       {error ? (
         <p role="alert" className="text-sm text-[#B23B23]">

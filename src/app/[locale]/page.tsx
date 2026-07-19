@@ -1,5 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { getAuthContext } from "@/server/auth/auth-context";
 import { postService } from "@/server/service-instances";
 import { listCategories, findCategoryBySlug } from "@/server/categories";
 import { prisma } from "@/server/repositories/prisma-client";
@@ -45,6 +46,8 @@ export default async function HomePage({
 
   const t = await getTranslations({ locale, namespace: "listing" });
   const tCategory = await getTranslations({ locale, namespace: "category" });
+  const tAnon = await getTranslations({ locale, namespace: "auth.anon" });
+  const authContext = await getAuthContext();
 
   const categories = await listCategories();
 
@@ -177,6 +180,15 @@ export default async function HomePage({
           />
         </div>
       </div>
+
+      {authContext.kind === "anon" && (
+        <Link
+          href="/signin"
+          className="w-fit rounded-full bg-[#2F6B4F] px-6 py-3 text-sm font-medium text-white hover:opacity-90"
+        >
+          {tAnon("signInToBrowse")}
+        </Link>
+      )}
 
       <p className="text-sm text-[#6B7268]">
         {t("resultsCount", { count: cards.length })}

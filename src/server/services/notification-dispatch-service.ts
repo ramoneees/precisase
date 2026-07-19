@@ -27,14 +27,20 @@
 // ---------------------------------------------------------------------
 // Local domain types (kept local per project convention — mirrors
 // PostService/InterestService: no import of app-layer types that may not
-// exist yet).
+// exist yet). The ONE exception is the error type imported below — it's
+// a sentinel thrown by `ResendMailer` so the dispatch loop can detect
+// "this address is suppressed, don't retry" without parsing error
+// messages. Same pattern as `MissingResendApiKeyError`.
 // ---------------------------------------------------------------------
+
+import { EmailAddressSuppressedError } from "@/server/notifications/mailer";
 
 export type NotificationTypeValue =
   | "interest_received"
   | "post_approved"
   | "post_rejected"
-  | "post_closed";
+  | "post_closed"
+  | "password_reset";
 
 export type NotificationChannelValue = "email" | "in_app";
 
@@ -93,6 +99,20 @@ export interface MailMessage {
  */
 export interface Mailer {
   send(message: MailMessage): Promise<void>;
+}
+
+/**
+ * Port for the suppression check `ResendMailer` does before sending (T22).
+ * Read-side of the columns set by the Resend webhook (T21). Returns
+ * `"bounced"` / `"complained"` if the address has a current suppression
+ * flag, or `null` if it's clear. Declared here (alongside `Mailer`)
+ * rather than in `mailer.ts` so the dispatch service's domain contract
+ * for "what does a mailer need to know about a recipient?" stays in one
+ * place — same pattern as `NotificationDispatchRepository`.
+ */
+export interface EmailSuppressionChecker {
+  /** Returns "bounced" | "complained" | null. */
+  checkStatus(email: string): Promise<"bounced" | "complained" | null>;
 }
 
 /**
@@ -182,6 +202,15 @@ export class NotificationDispatchService {
       return { id: notification.id, outcome: "sent" };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+
+      // Suppression is terminal — re-trying a known-bouncing address wastes
+      // quota and risks provider escalation. Mark failed immediately
+      // without incrementing attempts beyond the implicit 1 for this pass.
+      if (error instanceof EmailAddressSuppressedError) {
+        await this.repo.markFailed(notification.id, message);
+        return { id: notification.id, outcome: "failed" };
+      }
+
       const attemptsAfterThisFailure = notification.attempts + 1;
 
       if (attemptsAfterThisFailure >= this.maxAttempts) {

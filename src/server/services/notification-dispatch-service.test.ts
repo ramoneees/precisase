@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { EmailAddressSuppressedError } from "@/server/notifications/mailer";
 import {
   MAX_DELIVERY_ATTEMPTS,
   NotificationDispatchService,
@@ -70,12 +71,21 @@ class InMemoryNotificationDispatchRepository implements NotificationDispatchRepo
 class FakeMailer implements Mailer {
   readonly sent: MailMessage[] = [];
   private readonly failFor = new Set<string>();
+  private readonly suppressedFor = new Map<string, "bounced" | "complained">();
 
   failWhenSendingTo(to: string): void {
     this.failFor.add(to);
   }
 
+  suppressWhenSendingTo(to: string, reason: "bounced" | "complained"): void {
+    this.suppressedFor.set(to, reason);
+  }
+
   async send(message: MailMessage): Promise<void> {
+    const suppression = this.suppressedFor.get(message.to);
+    if (suppression !== undefined) {
+      throw new EmailAddressSuppressedError(suppression);
+    }
     if (this.failFor.has(message.to)) {
       throw new Error(`Simulated mailer failure for ${message.to}`);
     }
@@ -251,5 +261,35 @@ describe("NotificationDispatchService.dispatchQueued", () => {
 
     expect(results).toEqual([{ id: "notif-5", outcome: "failed" }]);
     expect(repo.markFailedCalls).toHaveLength(1);
+  });
+
+  it("marks a suppressed-address notification as failed immediately (no retry, even on attempt 0)", async () => {
+    repo.seed(makeNotification({ id: "notif-suppressed", attempts: 0 }));
+    mailer.suppressWhenSendingTo("author@example.com", "bounced");
+
+    const results = await service.dispatchQueued();
+
+    // Outcome is `failed`, not `retrying` — suppression is terminal.
+    expect(results).toEqual([{ id: "notif-suppressed", outcome: "failed" }]);
+    expect(repo.markFailedCalls).toHaveLength(1);
+    expect(repo.recordFailedAttemptCalls).toHaveLength(0);
+
+    const updated = repo.notifications.get("notif-suppressed");
+    expect(updated?.status).toBe("failed");
+    expect(updated?.lastError).toContain("EmailAddressSuppressedError");
+    expect(updated?.lastError).toContain("bounced");
+  });
+
+  it("marks a complaint-suppressed notification as failed immediately", async () => {
+    repo.seed(makeNotification({ id: "notif-complained", attempts: 2 }));
+    mailer.suppressWhenSendingTo("author@example.com", "complained");
+
+    const results = await service.dispatchQueued();
+
+    expect(results).toEqual([{ id: "notif-complained", outcome: "failed" }]);
+    expect(repo.markFailedCalls).toHaveLength(1);
+    expect(repo.recordFailedAttemptCalls).toHaveLength(0);
+    // lastError mentions the suppression reason for operator review.
+    expect(repo.markFailedCalls[0].error).toContain("complained");
   });
 });

@@ -34,6 +34,7 @@ interface EmailMessages {
   postRejected: { subject: string; body: string };
   postClosed: { subject: string; body: string };
   interestReceived: { subject: string; body: string; messageLine: string };
+  passwordReset: { subject: string; body: string };
 }
 
 const messagesCache = new Map<string, Promise<EmailMessages>>();
@@ -87,12 +88,31 @@ function readPostId(payload: Record<string, unknown>, fallback: string | null): 
 }
 
 /**
+ * password_reset reads `displayName` straight off the payload (not
+ * `notification.recipientDisplayName`, unlike every other template here) —
+ * per the caller contract in `PasswordResetService`/the reset request
+ * route, the payload carries its own already-resolved display name. Falls
+ * back to the same generic greeting used elsewhere (`readTitle`'s sibling)
+ * when it's missing or empty, so a blank name never renders as "Hello ,".
+ */
+function readDisplayName(payload: Record<string, unknown>): string {
+  const displayName = payload.displayName;
+  return typeof displayName === "string" && displayName.length > 0 ? displayName : "there";
+}
+
+function readResetUrl(payload: Record<string, unknown>): string {
+  const resetUrl = payload.resetUrl;
+  return typeof resetUrl === "string" ? resetUrl : "";
+}
+
+/**
  * Builds the localized subject/body for a single notification. Payload
  * shapes (confirmed at the `addNotification()` call sites, not guessed):
  *   - post_approved:     { postId, title }                            (post-service.ts `approvePost`)
  *   - post_rejected:      { postId, title, reason }                    (post-service.ts `rejectPost`)
  *   - interest_received:  { postId, title, interestedUserId, message } (interest-service.ts `expressInterest`)
  *   - post_closed:        { postId, title }                            (post-service.ts `closePost`, FR11)
+ *   - password_reset:     { displayName, resetUrl }                    (password-reset-service.ts `requestReset`, via a later wave's route)
  */
 export async function buildNotificationEmail(
   notification: NotificationRecord,
@@ -139,6 +159,15 @@ export async function buildNotificationEmail(
       return {
         subject: interpolate(t.subject, { title }),
         text: interpolate(t.body, { name, title, link, messageLine }),
+      };
+    }
+    case "password_reset": {
+      const t = messages.passwordReset;
+      const displayName = readDisplayName(payload);
+      const resetUrl = readResetUrl(payload);
+      return {
+        subject: t.subject,
+        text: interpolate(t.body, { displayName, resetUrl }),
       };
     }
     default: {

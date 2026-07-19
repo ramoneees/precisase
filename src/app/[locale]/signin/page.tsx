@@ -14,11 +14,14 @@ export async function generateMetadata({
 
 export default async function SigninPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ reset?: string }>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  const { reset } = await searchParams;
 
   const t = await getTranslations({ locale, namespace: "auth.signIn" });
 
@@ -31,6 +34,11 @@ export default async function SigninPage({
           </h1>
           <p className="text-center text-sm text-[#6B7268]">{t("subtitle")}</p>
         </div>
+        {reset === "success" ? (
+          <p role="status" className="text-center text-sm text-[#2F6B4F]">
+            {t("resetSuccess")}
+          </p>
+        ) : null}
         <SigninForm />
       </div>
     </main>

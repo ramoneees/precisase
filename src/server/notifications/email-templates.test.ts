@@ -132,4 +132,91 @@ describe("buildNotificationEmail", () => {
     expect(email.subject).toBeTruthy();
     expect(email.text).toBeTruthy();
   });
+
+  describe("password_reset", () => {
+    it("builds a pt-PT password_reset email with the reset URL and displayName", async () => {
+      const email = await buildNotificationEmail(
+        makeNotification({
+          recipientLocale: "pt-PT",
+          type: "password_reset",
+          payload: {
+            displayName: "Ana",
+            resetUrl: "https://precisase.example/pt-PT/reset-password?token=abc123",
+          },
+        }),
+      );
+
+      expect(email.text).toContain("Ana");
+      expect(email.text).toContain(
+        "https://precisase.example/pt-PT/reset-password?token=abc123",
+      );
+    });
+
+    it("builds an en password_reset email with the reset URL and displayName", async () => {
+      const email = await buildNotificationEmail(
+        makeNotification({
+          recipientLocale: "en",
+          type: "password_reset",
+          payload: {
+            displayName: "Ana",
+            resetUrl: "https://precisase.example/en/reset-password?token=abc123",
+          },
+        }),
+      );
+
+      expect(email.subject).toBe("Reset your password");
+      expect(email.text).toContain("Ana");
+      expect(email.text).toContain("https://precisase.example/en/reset-password?token=abc123");
+    });
+
+    it("builds a pt-BR password_reset email with the reset URL and displayName", async () => {
+      const email = await buildNotificationEmail(
+        makeNotification({
+          recipientLocale: "pt-BR",
+          type: "password_reset",
+          payload: {
+            displayName: "Ana",
+            resetUrl: "https://precisase.example/pt-BR/reset-password?token=abc123",
+          },
+        }),
+      );
+
+      expect(email.subject).toBe("Redefinir sua senha");
+      expect(email.text).toContain("Ana");
+      expect(email.text).toContain(
+        "https://precisase.example/pt-BR/reset-password?token=abc123",
+      );
+    });
+
+    it("falls back to a generic greeting when displayName is empty (no crash)", async () => {
+      const email = await buildNotificationEmail(
+        makeNotification({
+          recipientLocale: "en",
+          type: "password_reset",
+          payload: {
+            displayName: "",
+            resetUrl: "https://precisase.example/en/reset-password?token=abc123",
+          },
+        }),
+      );
+
+      expect(email.text).toContain("Hi there,");
+      expect(email.text).toContain("https://precisase.example/en/reset-password?token=abc123");
+    });
+
+    it("mentions the 1-hour expiry", async () => {
+      const email = await buildNotificationEmail(
+        makeNotification({
+          recipientLocale: "en",
+          type: "password_reset",
+          payload: {
+            displayName: "Ana",
+            resetUrl: "https://precisase.example/en/reset-password?token=abc123",
+          },
+        }),
+      );
+
+      expect(email.text).toContain("1 hour");
+    });
+  });
 });

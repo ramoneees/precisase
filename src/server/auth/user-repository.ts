@@ -9,6 +9,8 @@
  */
 
 import { Prisma } from "@/generated/prisma/client";
+import { decrypt } from "@/server/crypto/contact-encryption";
+import { logger } from "@/server/logger";
 import { prisma } from "@/server/repositories/prisma-client";
 import type { AuthRole, AuthUserRecord, AuthUserRepository } from "@/server/services/auth-service";
 
@@ -29,10 +31,35 @@ export class PrismaAuthUserRepository implements AuthUserRepository {
         timeZone: true,
         currency: true,
         deletedAt: true,
+        mfaSecret: true,
+        mfaEnabledAt: true,
       },
     });
     if (!user) {
       return null;
+    }
+
+    // Decryption happens ONLY at this repository boundary (mirrors
+    // `Post.contact_value` — see contact-encryption.ts docstring); the
+    // service/domain layer only ever sees plaintext or null.
+    let mfaSecret: string | null = null;
+    let mfaEnabledAt: Date | null = user.mfaEnabledAt;
+    if (user.mfaSecret) {
+      try {
+        mfaSecret = await decrypt(Buffer.from(user.mfaSecret, "base64"));
+      } catch (error) {
+        // Fail safe: a corrupt/tampered secret must never lock the user out
+        // of login entirely. Treat it as "no MFA configured" and log the
+        // failure so it's visible operationally.
+        logger.error({
+          module: "auth/user-repository",
+          event: "mfa_secret_decrypt_failed",
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        mfaSecret = null;
+        mfaEnabledAt = null;
+      }
     }
 
     return {
@@ -45,6 +72,8 @@ export class PrismaAuthUserRepository implements AuthUserRepository {
       timeZone: user.timeZone,
       currency: user.currency,
       deletedAt: user.deletedAt,
+      mfaSecret,
+      mfaEnabledAt,
     };
   }
 }

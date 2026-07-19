@@ -27,6 +27,7 @@ import { TemplateEmailBuilder } from "@/server/notifications/email-templates";
 import { createMailer } from "@/server/notifications/mailer";
 import { PrismaNotificationRepository } from "@/server/repositories/prisma-notification-repository";
 import { prisma } from "@/server/repositories/prisma-client";
+import { logger } from "@/server/logger";
 
 const POLL_INTERVAL_MS = Number(process.env.NOTIFICATION_WORKER_POLL_INTERVAL_MS) || 10_000;
 const BATCH_SIZE = Number(process.env.NOTIFICATION_WORKER_BATCH_SIZE) || 20;
@@ -41,7 +42,9 @@ function jitteredDelay(baseMs: number): number {
 }
 
 async function runOnce(service: NotificationDispatchService): Promise<void> {
+  const startedAt = Date.now();
   const results = await service.dispatchQueued(BATCH_SIZE);
+  const durationMs = Date.now() - startedAt;
   if (results.length === 0) {
     return;
   }
@@ -49,9 +52,14 @@ async function runOnce(service: NotificationDispatchService): Promise<void> {
   const sent = results.filter((r) => r.outcome === "sent").length;
   const retrying = results.filter((r) => r.outcome === "retrying").length;
   const failed = results.filter((r) => r.outcome === "failed").length;
-  log(
-    `processed ${results.length} notification(s) — sent: ${sent}, retrying: ${retrying}, failed: ${failed}`,
-  );
+  logger.info({
+    module: "notification-worker",
+    event: "poll_complete",
+    sent,
+    retrying,
+    failed,
+    durationMs,
+  });
 }
 
 async function main(): Promise<void> {

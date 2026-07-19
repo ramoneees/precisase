@@ -42,6 +42,8 @@ function makeUser(overrides: Partial<AuthUserRecord> = {}): AuthUserRecord {
     timeZone: null,
     currency: null,
     deletedAt: null,
+    mfaSecret: null,
+    mfaEnabledAt: null,
     ...overrides,
   };
 }
@@ -93,8 +95,26 @@ describe("verifyCredentials (docs/ARCHITECTURE.md §4.4)", () => {
       country: null,
       timeZone: null,
       currency: null,
+      mfaEnabledAt: null,
     });
     expect(result).not.toHaveProperty("passwordHash");
+    expect(result).not.toHaveProperty("mfaSecret");
+  });
+
+  it("passes through mfaEnabledAt for a user who has MFA enabled (without leaking mfaSecret)", async () => {
+    const repo = new InMemoryAuthUserRepository();
+    const enabledAt = new Date("2026-06-01T12:00:00Z");
+    repo.seed(makeUser({ mfaSecret: "decrypted-totp-secret", mfaEnabledAt: enabledAt }));
+    const passwordService = new FakePasswordVerifier();
+
+    const result = await verifyCredentials(
+      { email: "ana@example.com", password: "correct-password" },
+      repo,
+      passwordService,
+    );
+
+    expect(result?.mfaEnabledAt).toEqual(enabledAt);
+    expect(result).not.toHaveProperty("mfaSecret");
   });
 
   it("rejects a soft-deleted user even with correct credentials", async () => {

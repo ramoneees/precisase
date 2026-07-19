@@ -91,6 +91,7 @@ enum NotificationType {
   post_approved
   post_rejected
   post_closed
+  password_reset
 
   @@map("notification_type")
 }
@@ -153,18 +154,47 @@ model User {
   measurementSystem String?   @map("measurement_system")
   consentAt         DateTime? @map("consent_at") @db.Timestamptz()
   deletedAt         DateTime? @map("deleted_at") @db.Timestamptz()
+  /// Set by the Resend webhook (T21) on `email.bounced` events; read by
+  /// `ResendMailer.send` (T22) to short-circuit sends before hitting the API.
+  emailBouncedAt    DateTime? @map("email_bounced_at") @db.Timestamptz()
+  /// Set by the Resend webhook (T21) on `email.complained` events (e.g.
+  /// recipient clicked "spam" in their inbox). Suppression-flag semantics
+  /// mirror `emailBouncedAt` — once set, the address is never re-tried.
+  emailComplainedAt DateTime? @map("email_complained_at") @db.Timestamptz()
+  /// Base64-encoded libsodium crypto_secretbox ciphertext of the user's TOTP
+  /// secret. Null when MFA is not enabled (opt-in). Application layer only —
+  /// Prisma treats this as opaque text.
+  mfaSecret         String?   @map("mfa_secret")
+  mfaEnabledAt      DateTime? @map("mfa_enabled_at") @db.Timestamptz()
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
-  posts             Post[]             @relation("PostAuthor")
-  interests         Interest[]
-  moderationActions ModerationAction[]
-  consentRecords    ConsentRecord[]
-  notifications     Notification[]
-  auditLogs         AuditLog[]
-  apiKeysCreated    ApiKey[]
+  posts               Post[]                @relation("PostAuthor")
+  interests           Interest[]
+  moderationActions   ModerationAction[]
+  consentRecords      ConsentRecord[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+  apiKeysCreated      ApiKey[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
+}
+
+/// One-time password-reset tokens (forgot-password flow). Tokens are stored
+/// hashed (never plaintext) and expire; `usedAt` prevents replay.
+model PasswordResetToken {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  hashedToken String    @unique @map("hashed_token")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz()
+  usedAt      DateTime? @map("used_at") @db.Timestamptz()
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model Category {

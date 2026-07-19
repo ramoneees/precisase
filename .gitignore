@@ -47,3 +47,14 @@ tmp/
 # KNOWN LIMITATION: in Docker/production this directory is not a persistent
 # volume (public/ is baked into the image), so this is dev-only for now.
 /public/uploads/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Orchestration/agent scratch state — per-clone, not source
+.omc/
+.omo/
+.openclaude/
+
+# Generated graph artifacts (graphify skill output)
+graphify-out/

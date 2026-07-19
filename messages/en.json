@@ -74,6 +74,9 @@
         "goToPhoto": "View photo {number}"
       }
     },
+    "anon": {
+      "signInToExpressInterest": "Sign in to express interest"
+    },
     "createForm": {
       "heading": "Publish a request or an offer",
       "subtitle": "Your post becomes visible in the shop window once a moderator approves it.",
@@ -215,9 +218,89 @@
       "submitting": "Signing in…",
       "noAccount": "Don't have an account yet?",
       "signUpLink": "Create account",
+      "forgotPasswordLink": "Forgot your password?",
+      "resetSuccess": "Your password has been reset. You can now sign in.",
       "errors": {
         "invalidCredentials": "Incorrect email or password.",
         "generic": "Could not sign in. Please try again."
+      }
+    },
+    "forgotPassword": {
+      "title": "Forgot password",
+      "heading": "Forgot your password?",
+      "subtitle": "Enter your email and we'll send you a link to reset it.",
+      "emailLabel": "Email",
+      "submit": "Send reset link",
+      "submitting": "Sending…",
+      "successMessage": "If that email is registered, we've sent a link to reset your password.",
+      "backToSignIn": "Back to sign in",
+      "errors": {
+        "generic": "Something went wrong. Please try again."
+      }
+    },
+    "resetPassword": {
+      "title": "Reset password",
+      "heading": "Choose a new password",
+      "subtitle": "Enter a new password for your account.",
+      "newPasswordLabel": "New password",
+      "confirmPasswordLabel": "Confirm new password",
+      "submit": "Reset password",
+      "submitting": "Resetting…",
+      "errors": {
+        "invalidToken": "This reset link is invalid or has expired. Please request a new one.",
+        "weakPassword": "Password must be at least 8 characters long.",
+        "passwordMismatch": "Passwords do not match.",
+        "generic": "Could not reset your password. Please try again."
+      }
+    },
+    "anon": {
+      "signInToAct": "Sign in to continue",
+      "signInToContact": "Sign in to see contact details",
+      "signInToBrowse": "Sign in to express interest"
+    },
+    "mfa": {
+      "challenge": {
+        "title": "Two-factor authentication",
+        "heading": "Enter your verification code",
+        "subtitle": "Confirm your password and the 6-digit code from your authenticator app.",
+        "emailLabel": "Email",
+        "passwordLabel": "Password",
+        "codeLabel": "6-digit code",
+        "submit": "Verify and sign in",
+        "submitting": "Verifying…",
+        "errors": {
+          "invalidCredentials": "Invalid code or password.",
+          "generic": "Could not sign in. Please try again."
+        }
+      },
+      "setup": {
+        "title": "Two-factor authentication",
+        "heading": "Two-factor authentication",
+        "subtitle": "Add an extra layer of security with a time-based code from an authenticator app.",
+        "enrollButton": "Set up two-factor authentication",
+        "scanQrInstructions": "Scan this QR code with an authenticator app (Google Authenticator, 1Password, …), then enter the 6-digit code it shows.",
+        "secretFallbackLabel": "Or enter this code manually:",
+        "codeLabel": "6-digit code",
+        "verifyButton": "Verify and enable",
+        "verifying": "Verifying…",
+        "enabledConfirmation": "Two-factor authentication is enabled on your account.",
+        "disableButton": "Disable two-factor authentication",
+        "disableConfirmPrompt": "Enter your password to confirm disabling two-factor authentication.",
+        "disableConfirmYes": "Disable",
+        "disableConfirmCancel": "Cancel",
+        "passwordLabel": "Password",
+        "forcedBanner": "Two-factor authentication is now required for your role. Please set it up to continue.",
+        "errors": {
+          "invalidToken": "That code is invalid or has expired. Please try again.",
+          "notEnrolled": "Start the setup again to generate a new code.",
+          "invalidPassword": "Incorrect password.",
+          "generic": "Something went wrong. Please try again."
+        }
+      },
+      "warnBanner": {
+        "message": "Set up two-factor authentication to keep moderating.",
+        "messageWithDate": "Set up two-factor authentication to keep moderating — required from {date}.",
+        "link": "Set up now"
       }
     }
   },
@@ -318,6 +401,10 @@
       "subject": "Someone is interested in \"{title}\"",
       "body": "Hi {name},\n\nSomeone has expressed interest in your post \"{title}\".{messageLine}\n\nView it here: {link}\n\n— Precisa-se, Casa da Cidade",
       "messageLine": "\n\nTheir message: \"{message}\""
+    },
+    "passwordReset": {
+      "subject": "Reset your password",
+      "body": "Hi {displayName},\n\nWe received a request to reset your password. This link is valid for 1 hour.\n\nReset your password here: {resetUrl}\n\nIf you didn't request this, you can safely ignore this email.\n\n— Precisa-se, Casa da Cidade"
     }
   }
 }

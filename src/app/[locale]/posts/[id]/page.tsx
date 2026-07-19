@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { auth } from "@/auth";
+import { getAuthContext } from "@/server/auth/auth-context";
 import { Link } from "@/i18n/navigation";
 import { postService } from "@/server/service-instances";
 import { PostNotFoundError } from "@/server/services/post-service";
@@ -26,8 +26,9 @@ interface PageParams {
 
 async function loadPostUncached(params: PageParams) {
   const { locale, id } = params;
-  const session = await auth();
-  const viewer = session?.user ? { id: session.user.id, role: session.user.role } : null;
+  const authContext = await getAuthContext();
+  const viewer =
+    authContext.kind === "user" ? { id: authContext.user.id, role: authContext.user.role } : null;
 
   let post;
   try {
@@ -92,6 +93,7 @@ export default async function PostDetailPage({
 
   const t = await getTranslations({ locale, namespace: "post.detail" });
   const tCategory = await getTranslations({ locale, namespace: "category" });
+  const tAnon = await getTranslations({ locale, namespace: "post.anon" });
 
   const uploadedPhotos = getPostPhotos(post.extraAttributes).map(resolvePhotoUrl);
   const authorName = author?.displayName ?? "";
@@ -149,10 +151,10 @@ export default async function PostDetailPage({
         <ExpressInterestButton postId={post.id} locale={locale} />
       ) : post.status === "active" && !viewer ? (
         <Link
-          href="/signin"
+          href={`/signin?callbackUrl=${encodeURIComponent(`/posts/${post.id}`)}`}
           className="w-fit rounded-full bg-[#2F6B4F] px-6 py-3 text-sm font-medium text-white hover:opacity-90"
         >
-          {t("expressInterest")}
+          {tAnon("signInToExpressInterest")}
         </Link>
       ) : null}
     </main>

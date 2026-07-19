@@ -1,0 +1,48 @@
+# docker-compose.drill.yml — Drill-only overlay.
+#
+# Restores a prod backup into an isolated `drill-db` so the restore test
+# never touches the live `db` or staging DB. See
+# docs/ops/backup-restore-drill.md for the full procedure.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.drill.yml up -d drill-db
+#   docker compose -f docker-compose.yml -f docker-compose.drill.yml exec drill-db pg_isready -U precisase
+#   docker compose -f docker-compose.yml -f docker-compose.drill.yml down -v   # destroys drill_data
+#
+# Volumes:
+#   - `drill_data` is defined HERE and intentionally separate from the
+#     base `db_data` volume — `down -v` on this overlay nukes ONLY the
+#     drill copy, never the live DB.
+
+volumes:
+  drill_data:
+
+services:
+  # ---------------------------------------------------------------------
+  # drill-db — restore target for the weekly backup drill. Same image as
+  # the real `db` (postgres:16-alpine) so restore behaviour matches prod.
+  # Port 5433 is mapped to the host ONLY so the operator can poke at the
+  # restored DB with local psql if desired; the live `db` keeps its
+  # internal-only posture.
+  # ---------------------------------------------------------------------
+  drill-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - drill_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
