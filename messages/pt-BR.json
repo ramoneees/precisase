@@ -115,6 +115,7 @@
       "markResolved": "Marcar como resolvido",
       "reopen": "Reabrir",
       "view": "Ver",
+      "edit": "Editar",
       "editAndResubmit": "Editar e reenviar"
     },
     "toastClosed": "Post marcado como resolvido.",
@@ -125,7 +126,10 @@
     "edit": {
       "heading": "Editar e reenviar post",
       "subtitle": "Corrija o que for necessário e reenvie para aprovação de um moderador.",
+      "activeHeading": "Editar post",
+      "activeSubtitle": "As alterações são salvas na hora e o post continua visível na vitrine.",
       "rejectedReasonLabel": "Motivo da rejeição:",
+      "phoneCountryLabel": "País",
       "typeLabel": "Tipo",
       "typeOptions": {
         "request": "Pedido (preciso de algo)",
@@ -139,11 +143,16 @@
       "submit": "Reenviar para aprovação",
       "submitting": "Reenviando…",
       "toastSuccess": "Post reenviado para aprovação.",
+      "activeSubmit": "Salvar alterações",
+      "activeSubmitting": "Salvando…",
+      "activeToastSuccess": "Post atualizado.",
       "errors": {
         "invalidInput": "Verifique os dados informados e tente novamente.",
         "unauthorized": "Você não tem permissão para editar este post.",
         "invalidTransition": "Este post não pode mais ser reenviado.",
-        "generic": "Não foi possível reenviar o post. Tente novamente."
+        "activeInvalidTransition": "Este post não pode mais ser editado no estado atual.",
+        "generic": "Não foi possível reenviar o post. Tente novamente.",
+        "invalidPhone": "Digite um número de telefone válido para o país selecionado."
       }
     }
   },

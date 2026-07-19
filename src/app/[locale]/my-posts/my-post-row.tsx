@@ -114,6 +114,14 @@ export function MyPostRow({ post, locale }: { post: MyPostRowData; locale: strin
             {t("actions.editAndResubmit")}
           </Link>
         ) : null}
+        {post.status === "active" ? (
+          <Link
+            href={`/my-posts/${post.id}/edit`}
+            className="rounded-full border border-[#2F6B4F] px-4 py-2 text-sm font-medium text-[#2F6B4F] hover:bg-[#2F6B4F] hover:text-white"
+          >
+            {t("actions.edit")}
+          </Link>
+        ) : null}
         <Link
           href={`/posts/${post.id}`}
           className="rounded-full border border-[#E3DED2] bg-white px-4 py-2 text-sm font-medium text-[#232922] hover:border-[#2F6B4F] hover:text-[#2F6B4F]"

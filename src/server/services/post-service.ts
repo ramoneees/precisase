@@ -22,6 +22,8 @@
 // app-layer types that may not exist yet).
 // ---------------------------------------------------------------------
 
+import { PhoneService, type CountryCode } from "@/server/services/phone-service";
+
 export type ActorRole = "user" | "moderator" | "admin";
 
 export type PostStatusValue = "pending" | "active" | "closed" | "rejected";
@@ -188,6 +190,13 @@ export interface PostRepository {
    * first). Must only ever return `pending` posts.
    */
   listPending(): Promise<PostSummary[]>;
+  /**
+   * All users who previously expressed interest in this post (FR11 —
+   * used by `closePost` to queue "post_closed" notifications for each).
+   * Returns distinct user ids so a single user with multiple interests
+   * gets one notification, not N.
+   */
+  listInterestedUserIds(postId: string): Promise<string[]>;
   addModerationAction(action: ModerationActionRecord): Promise<void>;
   addNotification(notification: NotificationRecord): Promise<void>;
   addAuditLog(log: AuditLogRecord): Promise<void>;
@@ -451,6 +460,24 @@ export class PostService {
       closedAt,
     });
 
+    // FR11 — queue "post_closed" notifications for every user who
+    // previously expressed interest. Distinct user ids, so a single user
+    // with multiple interests gets one notification, not N. The
+    // notification worker dispatches them via the existing email-template
+    // path (email-templates.ts:134).
+    const interestedUserIds = await this.repo.listInterestedUserIds(postId);
+    await Promise.all(
+      interestedUserIds.map((userId) =>
+        this.repo.addNotification({
+          recipientId: userId,
+          postId,
+          type: "post_closed",
+          channel: "email",
+          payload: { postId, title: post.title },
+        }),
+      ),
+    );
+
     await this.repo.addAuditLog(
       buildPostAuditEntry({
         actorId: actor.id,
@@ -674,4 +701,51 @@ export class PostService {
       throw new ContactInfoRequiredError();
     }
   }
+}
+
+/**
+ * Thrown when a phone-format contact value cannot be parsed against the
+ * caller's country hint. The `code` is the discriminated `PhoneValidationError.code`
+ * (EMPTY / NOT_A_NUMBER / INVALID_FOR_COUNTRY / TOO_SHORT / TOO_LONG) so
+ * callers can map it to a localized message without parsing error strings.
+ *
+ * Distinct from `ContactInfoRequiredError`, which only fires on an empty
+ * value — that one means "you didn't fill the field"; this one means
+ * "you filled it with something the phone parser can't make sense of".
+ */
+export class InvalidPhoneError extends Error {
+  constructor(public readonly code: string) {
+    super(`Invalid phone number: ${code}`);
+    this.name = "InvalidPhoneError";
+  }
+}
+
+/**
+ * Validates and normalizes a post's contact value against the chosen
+ * method and a phone-country hint. Returns E.164 for `phone`/`whatsapp`
+ * (the canonical form stored at the service boundary per §7.4) or the
+ * trimmed raw value for `email` (no normalization). Throws
+ * `ContactInfoRequiredError` if the value is empty after trimming, or
+ * `InvalidPhoneError` if `PhoneService.parse` rejects the input for
+ * phone/whatsapp. The country hint is required for phone/whatsapp —
+ * callers typically derive it from `User.country` with
+ * `PHONE_COUNTRY_DEFAULT` as the final fallback.
+ */
+export function normalizeContactValue(
+  method: ContactMethodValue,
+  rawValue: string,
+  country: CountryCode,
+): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    throw new ContactInfoRequiredError();
+  }
+  if (method === "phone" || method === "whatsapp") {
+    const result = PhoneService.parse(trimmed, country);
+    if (!result.ok) {
+      throw new InvalidPhoneError(result.code);
+    }
+    return result.e164;
+  }
+  return trimmed;
 }

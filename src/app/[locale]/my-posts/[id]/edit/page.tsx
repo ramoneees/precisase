@@ -1,38 +1,39 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { auth } from "@/auth";
 import { redirect } from "@/i18n/navigation";
-import type { AppLocale } from "@/i18n/routing";
 import { postService } from "@/server/service-instances";
 import { PostNotFoundError } from "@/server/services/post-service";
+import { PHONE_COUNTRY_DEFAULT } from "@/server/services/phone-service";
+import { defaultPhoneCountryFor } from "@/lib/region-defaults";
 import { listCategories } from "@/server/categories";
-import { ResubmitPostForm } from "./resubmit-post-form";
+import { EditPostForm, type EditPostFormMode } from "./edit-post-form";
 
 interface PageParams {
-  locale: string;
   id: string;
 }
 
 /**
- * "Edit and resubmit" a rejected post (FR03,
- * `PostService.resubmitPost` in post-service.ts). A dedicated route
- * (mirroring `posts/new` and `posts/[id]`) rather than an inline-expand in
- * `MyPostRow`, so the row component stays a thin presentational list item
- * and this page owns loading the full post + category options needed to
- * pre-fill the form.
+ * Edit-post page (FR03) — handles two flows from the same URL:
+ *
+ *   - `rejected` post  → resubmit flow (full form: type/category/title/description/contact).
+ *   - `active` post    → edit-active flow (title/description/contact only — `PostService.editActivePost`
+ *                       does not allow changing type/category while a post is live).
+ *
+ * Only the post's author can use either flow (defense in depth, §7.2).
  */
-export default async function EditRejectedPostPage({
+export default async function EditPostPage({
   params,
 }: {
   params: Promise<PageParams>;
 }) {
-  const { locale, id } = await params;
-  setRequestLocale(locale);
+  const { id } = await params;
+  const locale = await getLocale();
 
   const session = await auth();
   if (!session?.user) {
-    redirect({ href: "/signin", locale: locale as AppLocale });
+    redirect({ href: "/signin", locale });
     return null;
   }
 
@@ -48,38 +49,47 @@ export default async function EditRejectedPostPage({
     throw error;
   }
 
-  // Defense in depth (§7.2): `getPost` also lets a moderator/admin view a
-  // non-active post, but only the post's own author may resubmit it — a
-  // moderator hitting this URL directly should be bounced back, not shown
-  // an edit form for someone else's post.
   if (post.authorId !== session.user.id) {
-    redirect({ href: "/my-posts", locale: locale as AppLocale });
+    redirect({ href: "/my-posts", locale });
     return null;
   }
 
-  // Nothing to resubmit unless the post is actually rejected — a stale
-  // link/back-navigation after a successful resubmit would otherwise land
-  // here on a now-`pending` post.
-  if (post.status !== "rejected") {
-    redirect({ href: "/my-posts", locale: locale as AppLocale });
+  const mode: EditPostFormMode | null =
+    post.status === "rejected"
+      ? "rejected"
+      : post.status === "active"
+        ? "active"
+        : null;
+
+  if (mode === null) {
+    redirect({ href: "/my-posts", locale });
     return null;
   }
 
   const categories = await listCategories();
   const t = await getTranslations({ locale, namespace: "myPosts.edit" });
 
+  // Initial phone-country hint for the contact dropdown. The server action
+  // re-parses the value with whatever country the user picks in the form
+  // (defense in depth, §7.2) — this prop only seeds the dropdown's state.
+  const phoneCountry =
+    defaultPhoneCountryFor(session.user.country) ?? PHONE_COUNTRY_DEFAULT;
+
   return (
     <main className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-6 px-6 py-10">
       <div className="flex flex-col gap-2">
         <h1 className="font-heading text-[28px] leading-tight font-extrabold text-[#232922]">
-          {t("heading")}
+          {t(mode === "active" ? "activeHeading" : "heading")}
         </h1>
-        <p className="text-sm text-[#6B7268]">{t("subtitle")}</p>
+        <p className="text-sm text-[#6B7268]">
+          {t(mode === "active" ? "activeSubtitle" : "subtitle")}
+        </p>
       </div>
 
-      <ResubmitPostForm
+      <EditPostForm
         categories={categories}
         postId={post.id}
+        mode={mode}
         rejectedReason={post.rejectedReason}
         initial={{
           type: post.type,
@@ -89,17 +99,14 @@ export default async function EditRejectedPostPage({
           contactMethod: post.contactMethod,
           contactValue: post.contactValue,
         }}
+        phoneCountry={phoneCountry}
       />
     </main>
   );
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<PageParams>;
-}): Promise<Metadata> {
-  const { locale } = await params;
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
   const t = await getTranslations({ locale, namespace: "myPosts.edit" });
   return { title: t("heading") };
 }

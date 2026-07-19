@@ -1,10 +1,12 @@
 "use server";
 
 /**
- * "Edit and resubmit" Server Action (FR03, rejected -> pending), wiring
- * `postService.resubmitPost` (post-service.ts) to the UI. Re-validates
- * required fields server-side (defense in depth, §7.2), same pattern as
- * `posts/new/actions.ts`'s `createPostAction`.
+ * "Edit an active post" Server Action (FR03, `PostService.editActivePost`
+ * in post-service.ts). Sibling of `resubmitPostAction` — different
+ * state transition (active → active, no moderation step) and different
+ * error codes. Re-validates required fields server-side (defense in
+ * depth, §7.2), same pattern as `resubmitPostAction` and
+ * `createPostAction`.
  */
 
 import { revalidatePath } from "next/cache";
@@ -18,35 +20,39 @@ import {
   UnauthorizedPostActionError,
   normalizeContactValue,
   type ContactMethodValue,
-  type PostTypeValue,
 } from "@/server/services/post-service";
 import { PHONE_COUNTRY_DEFAULT, type CountryCode } from "@/server/services/phone-service";
 import { defaultPhoneCountryFor } from "@/lib/region-defaults";
 
-export type ResubmitPostErrorCode =
+export type EditActivePostErrorCode =
   | "unauthenticated"
   | "invalidInput"
   | "invalidPhone"
   | "unauthorized"
-  | "invalidTransition"
+  | "activeInvalidTransition"
   | "generic";
 
-export type ResubmitPostResult = { ok: true } | { ok: false; error: ResubmitPostErrorCode };
+export type EditActivePostResult = {
+  ok: true;
+} | { ok: false; error: EditActivePostErrorCode };
 
-export interface ResubmitPostInput {
+export interface EditActivePostInput {
   postId: string;
-  type: PostTypeValue;
-  categoryId: string;
   title: string;
   description: string;
   contactMethod: ContactMethodValue;
   contactValue: string;
+  /**
+   * ISO 3166-1 alpha-2 hint for `phone`/`whatsapp` parsing. Falls back to
+   * the viewer's country on the server when omitted (e.g. the active-edit
+   * form supplies this from its country dropdown).
+   */
   phoneCountry?: string;
 }
 
-export async function resubmitPostAction(
-  input: ResubmitPostInput,
-): Promise<ResubmitPostResult> {
+export async function editActivePostAction(
+  input: EditActivePostInput,
+): Promise<EditActivePostResult> {
   const session = await auth();
   if (!session?.user) {
     return { ok: false, error: "unauthenticated" };
@@ -55,7 +61,7 @@ export async function resubmitPostAction(
   const title = input.title?.trim() ?? "";
   const description = input.description?.trim() ?? "";
 
-  if (!title || !description || !input.categoryId) {
+  if (!title || !description) {
     return { ok: false, error: "invalidInput" };
   }
 
@@ -83,12 +89,10 @@ export async function resubmitPostAction(
   }
 
   try {
-    await postService.resubmitPost({
+    await postService.editActivePost({
       postId: input.postId,
       actor: { id: session.user.id, role: session.user.role },
       updates: {
-        type: input.type,
-        categoryId: input.categoryId,
         title,
         description,
         contactMethod: input.contactMethod,
@@ -103,12 +107,13 @@ export async function resubmitPostAction(
       return { ok: false, error: "unauthorized" };
     }
     if (error instanceof InvalidPostTransitionError || error instanceof PostNotFoundError) {
-      return { ok: false, error: "invalidTransition" };
+      return { ok: false, error: "activeInvalidTransition" };
     }
     return { ok: false, error: "generic" };
   }
 
   revalidatePath(`/my-posts`);
+  revalidatePath(`/posts/${input.postId}`);
 
   return { ok: true };
 }

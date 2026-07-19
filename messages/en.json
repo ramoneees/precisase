@@ -115,6 +115,7 @@
       "markResolved": "Mark as resolved",
       "reopen": "Reopen",
       "view": "View",
+      "edit": "Edit",
       "editAndResubmit": "Edit and resubmit"
     },
     "toastClosed": "Post marked as resolved.",
@@ -125,7 +126,10 @@
     "edit": {
       "heading": "Edit and resubmit post",
       "subtitle": "Fix whatever needs fixing and resubmit it for a moderator's approval.",
+      "activeHeading": "Edit post",
+      "activeSubtitle": "Changes are saved immediately and the post stays visible in the shop window.",
       "rejectedReasonLabel": "Rejection reason:",
+      "phoneCountryLabel": "Country",
       "typeLabel": "Type",
       "typeOptions": {
         "request": "Request (I need something)",
@@ -139,11 +143,16 @@
       "submit": "Resubmit for approval",
       "submitting": "Resubmitting…",
       "toastSuccess": "Post resubmitted for approval.",
+      "activeSubmit": "Save changes",
+      "activeSubmitting": "Saving…",
+      "activeToastSuccess": "Post updated.",
       "errors": {
         "invalidInput": "Please check the fields and try again.",
         "unauthorized": "You don't have permission to edit this post.",
         "invalidTransition": "This post can no longer be resubmitted.",
-        "generic": "Could not resubmit the post. Please try again."
+        "activeInvalidTransition": "This post can no longer be edited in its current state.",
+        "generic": "Could not resubmit the post. Please try again.",
+        "invalidPhone": "Please enter a valid phone number for the selected country."
       }
     }
   },

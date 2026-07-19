@@ -89,15 +89,10 @@ function readPostId(payload: Record<string, unknown>, fallback: string | null): 
 /**
  * Builds the localized subject/body for a single notification. Payload
  * shapes (confirmed at the `addNotification()` call sites, not guessed):
- *   - post_approved:     { postId, title }                       (post-service.ts `approvePost`)
- *   - post_rejected:      { postId, title, reason }               (post-service.ts `rejectPost`)
+ *   - post_approved:     { postId, title }                            (post-service.ts `approvePost`)
+ *   - post_rejected:      { postId, title, reason }                    (post-service.ts `rejectPost`)
  *   - interest_received:  { postId, title, interestedUserId, message } (interest-service.ts `expressInterest`)
- *   - post_closed:        not yet written by any call site as of this
- *     change — `PostService.closePost` records an AuditLog but no
- *     Notification. Handled defensively here (mirrors `post_approved`'s
- *     `{ postId, title }` shape, the closest existing precedent) so the
- *     dispatch pipeline is ready the moment that gap is closed, without
- *     guessing at fields that don't exist yet.
+ *   - post_closed:        { postId, title }                            (post-service.ts `closePost`, FR11)
  */
 export async function buildNotificationEmail(
   notification: NotificationRecord,

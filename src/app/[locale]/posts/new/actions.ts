@@ -14,13 +14,18 @@ import { postService } from "@/server/service-instances";
 import { findCategoryBySlug } from "@/server/categories";
 import {
   ContactInfoRequiredError,
+  InvalidPhoneError,
+  normalizeContactValue,
   type ContactMethodValue,
   type PostTypeValue,
 } from "@/server/services/post-service";
+import { PHONE_COUNTRY_DEFAULT, type CountryCode } from "@/server/services/phone-service";
+import { defaultPhoneCountryFor } from "@/lib/region-defaults";
 
 export type CreatePostErrorCode =
   | "unauthenticated"
   | "invalidInput"
+  | "invalidPhone"
   | "consentRequired"
   | "generic";
 
@@ -38,6 +43,8 @@ export interface CreatePostInput {
   consent: boolean;
   /** Relative URLs already uploaded via `/api/uploads` (up to 4). */
   photos: string[];
+  /** Optional override for `phone`/`whatsapp` parsing (server falls back to viewer country). */
+  phoneCountry?: string;
 }
 
 export async function createPostAction(
@@ -50,7 +57,6 @@ export async function createPostAction(
 
   const title = input.title?.trim() ?? "";
   const description = input.description?.trim() ?? "";
-  const contactValue = input.contactValue?.trim() ?? "";
 
   // Content locale for the post (used by FTS — see posts_search_config in
   // prisma/migrations/20260718181500_post_search_indexes/migration.sql).
@@ -59,7 +65,7 @@ export async function createPostAction(
   // form input, since the form no longer threads locale through.
   const locale = await getLocale();
 
-  if (!title || !description || !contactValue) {
+  if (!title || !description) {
     return { ok: false, error: "invalidInput" };
   }
 
@@ -70,6 +76,29 @@ export async function createPostAction(
   const category = await findCategoryBySlug(input.categorySlug);
   if (!category) {
     return { ok: false, error: "invalidInput" };
+  }
+
+  const phoneCountry: CountryCode =
+    (typeof input.phoneCountry === "string" && input.phoneCountry.length > 0
+      ? (input.phoneCountry as CountryCode)
+      : (defaultPhoneCountryFor(session.user.country) as CountryCode | null)) ??
+    PHONE_COUNTRY_DEFAULT;
+
+  let normalizedContact: string;
+  try {
+    normalizedContact = normalizeContactValue(
+      input.contactMethod,
+      input.contactValue,
+      phoneCountry,
+    );
+  } catch (error) {
+    if (error instanceof InvalidPhoneError) {
+      return { ok: false, error: "invalidPhone" };
+    }
+    if (error instanceof ContactInfoRequiredError) {
+      return { ok: false, error: "invalidInput" };
+    }
+    throw error;
   }
 
   const photos = Array.isArray(input.photos)
@@ -84,7 +113,7 @@ export async function createPostAction(
       title,
       description,
       contactMethod: input.contactMethod,
-      contactValue,
+      contactValue: normalizedContact,
       locale,
       extraAttributes: photos.length > 0 ? { photos } : {},
     });

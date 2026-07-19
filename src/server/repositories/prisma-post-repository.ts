@@ -345,6 +345,15 @@ export class PrismaPostRepository implements PostRepository {
     return posts.map(toPostSummary);
   }
 
+  async listInterestedUserIds(postId: string): Promise<string[]> {
+    const rows = await prisma.interest.findMany({
+      where: { postId },
+      select: { userId: true },
+      distinct: ["userId"],
+    });
+    return rows.map((row) => row.userId);
+  }
+
   async addModerationAction(action: ModerationActionRecord): Promise<void> {
     await prisma.moderationAction.create({
       data: {

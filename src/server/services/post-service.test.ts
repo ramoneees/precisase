@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ContactInfoRequiredError,
+  InvalidPhoneError,
   InvalidPostTransitionError,
   ModerationReasonRequiredError,
   PostNotFoundError,
   PostService,
   UnauthorizedPostActionError,
+  normalizeContactValue,
   type Actor,
   type ActorRole,
   type AuditLogRecord,
@@ -24,6 +26,7 @@ import {
  */
 class InMemoryPostRepository implements PostRepository {
   readonly posts = new Map<string, PostRecord>();
+  readonly interests = new Map<string, { postId: string; userId: string }[]>();
   readonly moderationActions: ModerationActionRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
@@ -31,6 +34,11 @@ class InMemoryPostRepository implements PostRepository {
 
   seed(post: PostRecord): void {
     this.posts.set(post.id, post);
+  }
+
+  seedInterest(postId: string, userId: string): void {
+    const existing = this.interests.get(postId) ?? [];
+    this.interests.set(postId, [...existing, { postId, userId }]);
   }
 
   async findById(id: string): Promise<PostRecord | null> {
@@ -123,6 +131,11 @@ class InMemoryPostRepository implements PostRepository {
 
   async addAuditLog(log: AuditLogRecord): Promise<void> {
     this.auditLogs.push(log);
+  }
+
+  async listInterestedUserIds(postId: string): Promise<string[]> {
+    const entries = this.interests.get(postId) ?? [];
+    return [...new Set(entries.map((e) => e.userId))];
   }
 }
 
@@ -319,6 +332,50 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       await expect(
         service.closePost({ postId: "post-1", actor: actor("author-1", "user") }),
       ).rejects.toThrow(InvalidPostTransitionError);
+    });
+
+    it("queues a post_closed notification for every user who expressed interest (FR11)", async () => {
+      repo.seed(makePost({ status: "active", title: "Preciso de voluntários" }));
+      repo.seedInterest("post-1", "interested-user-1");
+      repo.seedInterest("post-1", "interested-user-2");
+
+      await service.closePost({ postId: "post-1", actor: actor("author-1", "user") });
+
+      const closedNotifications = repo.notifications.filter(
+        (n) => n.type === "post_closed" && n.postId === "post-1",
+      );
+      expect(closedNotifications).toHaveLength(2);
+      const recipientIds = closedNotifications.map((n) => n.recipientId).sort();
+      expect(recipientIds).toEqual(["interested-user-1", "interested-user-2"]);
+      for (const n of closedNotifications) {
+        expect(n.channel).toBe("email");
+        expect(n.payload).toEqual({ postId: "post-1", title: "Preciso de voluntários" });
+      }
+    });
+
+    it("deduplicates notifications when a single user has multiple interests in the same post (FR11)", async () => {
+      repo.seed(makePost({ status: "active" }));
+      repo.seedInterest("post-1", "interested-user-1");
+      repo.seedInterest("post-1", "interested-user-1");
+      repo.seedInterest("post-1", "interested-user-1");
+
+      await service.closePost({ postId: "post-1", actor: actor("author-1", "user") });
+
+      const closedNotifications = repo.notifications.filter(
+        (n) => n.type === "post_closed",
+      );
+      expect(closedNotifications).toHaveLength(1);
+    });
+
+    it("does not queue any notifications when no one expressed interest", async () => {
+      repo.seed(makePost({ status: "active" }));
+
+      await service.closePost({ postId: "post-1", actor: actor("author-1", "user") });
+
+      const closedNotifications = repo.notifications.filter(
+        (n) => n.type === "post_closed",
+      );
+      expect(closedNotifications).toEqual([]);
     });
   });
 
@@ -772,5 +829,53 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
         service.getPost({ postId: "missing", viewer: viewer("admin-1", "admin") }),
       ).rejects.toThrow(PostNotFoundError);
     });
+  });
+});
+
+describe("normalizeContactValue (contact-value normalization for create/edit/resubmit)", () => {
+  it("returns canonical E.164 for a valid phone with matching country hint", () => {
+    expect(normalizeContactValue("phone", "912 345 678", "PT")).toBe("+351912345678");
+    expect(normalizeContactValue("whatsapp", "(11) 99123-4567", "BR")).toBe(
+      "+5511991234567",
+    );
+  });
+
+  it("honors an explicit `+` prefix over the country hint", () => {
+    expect(normalizeContactValue("phone", "+44 20 7946 0958", "PT")).toBe(
+      "+442079460958",
+    );
+  });
+
+  it("trims whitespace before validating email", () => {
+    expect(normalizeContactValue("email", "  user@example.com  ", "PT")).toBe(
+      "user@example.com",
+    );
+  });
+
+  it("throws ContactInfoRequiredError for an empty value", () => {
+    expect(() => normalizeContactValue("phone", "", "PT")).toThrow(
+      ContactInfoRequiredError,
+    );
+    expect(() => normalizeContactValue("phone", "   ", "PT")).toThrow(
+      ContactInfoRequiredError,
+    );
+    expect(() => normalizeContactValue("email", "", "PT")).toThrow(
+      ContactInfoRequiredError,
+    );
+  });
+
+  it("throws InvalidPhoneError with code when phone is invalid for the country", () => {
+    let caught: unknown;
+    try {
+      normalizeContactValue("phone", "123", "PT");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(InvalidPhoneError);
+    expect((caught as InvalidPhoneError).code).toMatch(/TOO_SHORT|INVALID_FOR_COUNTRY/);
+  });
+
+  it("does not phone-parse email contact (passes the value through as-is)", () => {
+    expect(normalizeContactValue("email", "not-a-phone", "PT")).toBe("not-a-phone");
   });
 });
