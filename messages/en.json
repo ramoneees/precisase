@@ -65,7 +65,6 @@
       "errors": {
         "unauthenticated": "You need to sign in to express interest.",
         "unavailable": "This request is no longer available.",
-        "duplicate": "You've already expressed interest in this request.",
         "generic": "Could not register your interest. Please try again."
       },
       "gallery": {

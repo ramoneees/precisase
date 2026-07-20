@@ -65,7 +65,6 @@
       "errors": {
         "unauthenticated": "Precisas de entrar para manifestar interesse.",
         "unavailable": "Este pedido já não está disponível.",
-        "duplicate": "Já manifestaste interesse neste pedido.",
         "generic": "Não foi possível registar o teu interesse. Tenta novamente."
       },
       "gallery": {

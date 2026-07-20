@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  DuplicateInterestError,
   InterestMessageTooLongError,
   InterestService,
   MAX_INTEREST_MESSAGE_LENGTH,
@@ -40,7 +39,16 @@ class InMemoryInterestRepository implements InterestRepository {
     postId: string;
     userId: string;
     message: string | null;
-  }): Promise<InterestRecord> {
+  }): Promise<{ record: InterestRecord; created: boolean }> {
+    const existing = this.interests.find(
+      (i) => i.postId === data.postId && i.userId === data.userId,
+    );
+    if (existing) {
+      // Mirrors the Prisma P2002 path: re-fetch the existing row, signal
+      // `created: false`. Used by the C7 idempotency tests below.
+      return { record: existing, created: false };
+    }
+
     const record: InterestRecord = {
       id: `interest-${this.interests.length + 1}`,
       postId: data.postId,
@@ -49,7 +57,7 @@ class InMemoryInterestRepository implements InterestRepository {
       createdAt: new Date(),
     };
     this.interests.push(record);
-    return record;
+    return { record, created: true };
   }
 
   async addNotification(notification: NotificationRecord): Promise<void> {
@@ -113,15 +121,46 @@ describe("InterestService.expressInterest (FR09, ARCHITECTURE.md §6.2)", () => 
     expect(repo.notifications).toHaveLength(1);
   });
 
-  it("rejects a duplicate interest for the same (post_id, user_id) pair", async () => {
+  it("is idempotent for a duplicate (post_id, user_id) pair (C7)", async () => {
     repo.seedPost(makePost());
+    const first = await service.expressInterest({ postId: "post-1", userId: "user-2" });
+    const second = await service.expressInterest({ postId: "post-1", userId: "user-2" });
+
+    // Returns the same record (same id) on the second call, no throw.
+    expect(second.id).toBe(first.id);
+    expect(repo.interests).toHaveLength(1);
+  });
+
+  it("queues exactly one author notification across duplicate calls (C7)", async () => {
+    repo.seedPost(makePost());
+
+    // Simulates sequential double-click: both calls complete.
+    await service.expressInterest({ postId: "post-1", userId: "user-2" });
     await service.expressInterest({ postId: "post-1", userId: "user-2" });
 
-    await expect(
-      service.expressInterest({ postId: "post-1", userId: "user-2" }),
-    ).rejects.toThrow(DuplicateInterestError);
+    expect(repo.interests).toHaveLength(1);
+    expect(repo.notifications).toHaveLength(1);
+    expect(repo.notifications[0]).toEqual(
+      expect.objectContaining({
+        recipientId: "author-1",
+        type: "interest_received",
+      }),
+    );
+  });
 
-    // No second Interest row and no second Notification were created.
+  it("treats a concurrent race-loser as idempotent (C7)", async () => {
+    repo.seedPost(makePost());
+
+    // Two in-flight calls racing against the same repo state: both are
+    // awaited together. The fake serializes the createInterest calls, so
+    // the second sees the row the first inserted — mirroring the Prisma
+    // P2002 path.
+    const [a, b] = await Promise.all([
+      service.expressInterest({ postId: "post-1", userId: "user-2" }),
+      service.expressInterest({ postId: "post-1", userId: "user-2" }),
+    ]);
+
+    expect(a.id).toBe(b.id);
     expect(repo.interests).toHaveLength(1);
     expect(repo.notifications).toHaveLength(1);
   });

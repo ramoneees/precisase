@@ -65,7 +65,6 @@
       "errors": {
         "unauthenticated": "Você precisa entrar para manifestar interesse.",
         "unavailable": "Este pedido não está mais disponível.",
-        "duplicate": "Você já manifestou interesse neste pedido.",
         "generic": "Não foi possível registrar seu interesse. Tente novamente."
       },
       "gallery": {

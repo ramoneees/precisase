@@ -1,13 +1,13 @@
 /**
  * Prisma-backed implementation of the `InterestRepository` port
- * (src/server/services/interest-service.ts). Maps the `(post_id, user_id)`
- * unique constraint (§5.1) onto `DuplicateInterestError` as a second line
- * of defense behind `InterestService`'s own existence check.
+ * (src/server/services/interest-service.ts). Enforces the `(post_id,
+ * user_id)` unique constraint (§5.1) as the single line of defense against
+ * duplicate interest: on a `P2002` violation it re-fetches and returns the
+ * existing row with `created: false` (C7 idempotency contract).
  */
 
 import { Prisma } from "@/generated/prisma/client";
 import {
-  DuplicateInterestError,
   type InterestPostSummary,
   type InterestRecord,
   type InterestRepository,
@@ -61,7 +61,7 @@ export class PrismaInterestRepository implements InterestRepository {
     postId: string;
     userId: string;
     message: string | null;
-  }): Promise<InterestRecord> {
+  }): Promise<{ record: InterestRecord; created: boolean }> {
     try {
       const created = await prisma.interest.create({
         data: {
@@ -72,15 +72,25 @@ export class PrismaInterestRepository implements InterestRepository {
       });
 
       return {
-        id: created.id,
-        postId: created.postId,
-        userId: created.userId,
-        message: created.message,
-        createdAt: created.createdAt,
+        record: {
+          id: created.id,
+          postId: created.postId,
+          userId: created.userId,
+          message: created.message,
+          createdAt: created.createdAt,
+        },
+        created: true,
       };
     } catch (error) {
       if (isUniqueConstraintViolation(error)) {
-        throw new DuplicateInterestError(data.postId, data.userId);
+        const existing = await this.findInterest(data.postId, data.userId);
+        if (existing) {
+          return { record: existing, created: false };
+        }
+        // Constraint fired but the row is gone — extremely unlikely (concurrent
+        // delete). Re-throw so the caller surfaces a generic error rather than
+        // masking an inconsistent state.
+        throw error;
       }
       throw error;
     }

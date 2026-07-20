@@ -9,10 +9,16 @@
  * Like PostService, this module depends on a narrow `InterestRepository`
  * port rather than the full Prisma client, so the unique-constraint and
  * notification behavior can be unit-tested with an in-memory fake (see
- * interest-service.test.ts). A Prisma-backed implementation of
- * `InterestRepository` maps `DuplicateInterestError` onto the database's
- * `(post_id, user_id)` unique constraint (§5.1) as a second line of
- * defense.
+ * interest-service.test.ts).
+ *
+ * Idempotency (C7): `expressInterest` is idempotent for a given
+ * (postId, userId) pair. The repository's `createInterest` returns
+ * `{ record, created }` — on the unique-constraint hit (concurrent or
+ * sequential duplicate), it surfaces the existing row with
+ * `created: false` instead of throwing, and the service skips the
+ * author notification in that case. This eliminates the TOCTOU race the
+ * earlier find-then-create sequence had under concurrent duplicate
+ * clicks.
  */
 
 // ---------------------------------------------------------------------
@@ -52,11 +58,21 @@ export interface NotificationRecord {
 export interface InterestRepository {
   findPostById(postId: string): Promise<InterestPostSummary | null>;
   findInterest(postId: string, userId: string): Promise<InterestRecord | null>;
+  /**
+   * Inserts an interest row, enforcing the `(post_id, user_id)` unique
+   * constraint (§5.1) as the single line of defense against duplicates.
+   *
+   * Idempotent contract (C7): returns `{ record, created }`. The Prisma
+   * implementation catches the `P2002` unique-violation and re-fetches
+   * the existing row, returning it with `created: false`. The service
+   * uses the `created` flag to decide whether to notify the author, so
+   * duplicate requests never produce a second notification.
+   */
   createInterest(data: {
     postId: string;
     userId: string;
     message: string | null;
-  }): Promise<InterestRecord>;
+  }): Promise<{ record: InterestRecord; created: boolean }>;
   addNotification(notification: NotificationRecord): Promise<void>;
 }
 
@@ -75,14 +91,6 @@ export class PostNotAvailableError extends Error {
   constructor(postId: string, status: InterestPostStatus) {
     super(`Post ${postId} is "${status}" and is not accepting new interest.`);
     this.name = "PostNotAvailableError";
-  }
-}
-
-/** Maps onto the `(post_id, user_id)` unique constraint from §5.1. */
-export class DuplicateInterestError extends Error {
-  constructor(postId: string, userId: string) {
-    super(`User ${userId} has already expressed interest in post ${postId}.`);
-    this.name = "DuplicateInterestError";
   }
 }
 
@@ -113,6 +121,13 @@ export class InterestService {
    * interested" notification for its author (§6.2). Only active posts can
    * receive interest: the shop window only ever surfaces `active` posts,
    * so pending/closed/rejected posts cannot legitimately receive one.
+   *
+   * Idempotent (C7): if an interest row already exists for this
+   * (postId, userId) pair — whether from a concurrent click or a
+   * sequential re-submit — the existing record is returned and no
+   * duplicate notification is queued. The (post_id, user_id) unique
+   * constraint is the single line of defense; the repo signals "already
+   * exists" via `created: false`.
    */
   async expressInterest({
     postId,
@@ -133,22 +148,23 @@ export class InterestService {
       throw new PostNotAvailableError(postId, post.status);
     }
 
-    const existing = await this.repo.findInterest(postId, userId);
-    if (existing) {
-      throw new DuplicateInterestError(postId, userId);
-    }
-
-    const interest = await this.repo.createInterest({ postId, userId, message: trimmedMessage });
-
-    await this.repo.addNotification({
-      recipientId: post.authorId,
+    const { record, created } = await this.repo.createInterest({
       postId,
-      type: "interest_received",
-      channel: "email",
-      status: "queued",
-      payload: { postId, title: post.title, interestedUserId: userId, message: trimmedMessage },
+      userId,
+      message: trimmedMessage,
     });
 
-    return interest;
+    if (created) {
+      await this.repo.addNotification({
+        recipientId: post.authorId,
+        postId,
+        type: "interest_received",
+        channel: "email",
+        status: "queued",
+        payload: { postId, title: post.title, interestedUserId: userId, message: trimmedMessage },
+      });
+    }
+
+    return record;
   }
 }
