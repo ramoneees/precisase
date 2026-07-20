@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Webhook } from "svix";
 import { Prisma } from "@/generated/prisma/client";
@@ -22,9 +23,12 @@ import { POST } from "./route";
 
 // svix's `Webhook` constructor base64-decodes the secret after stripping
 // the `whsec_` prefix (per Standard Webhooks spec). Real Resend secrets
-// are `whsec_<base64>` so this matches production format. Use a real
-// base64 string here — a non-base64 placeholder throws at construction.
-const TEST_SECRET = "whsec_X8qZ0kT3lZvM4yRq1nQ2wVpA5bC7dE9fG0hI2jK4lM6nO8pQ0rS==";
+// are `whsec_<base64>` so this matches production format. Generated at
+// module load rather than hardcoded — a literal `whsec_<base64>` string
+// in source trips GitHub secret scanning on every push, and svix only
+// needs a validly-decodable key (sign + verify both use this in-memory
+// value, so the verification path is exercised either way).
+const TEST_SECRET = `whsec_${randomBytes(24).toString("base64")}`;
 const WEBHOOK_URL = "http://localhost/api/webhooks/resend";
 
 function signPayload(
