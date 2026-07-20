@@ -319,6 +319,8 @@
     "phoneLabel": "Phone",
     "phonePlaceholder": "912 345 678",
     "phoneCountryLabel": "Country",
+    "countryLabel": "Country",
+    "timeZoneLabel": "Time zone",
     "churchAffiliationLabel": "Community / church (optional)",
     "churchAffiliationPlaceholder": "E.g. Casa da Cidade — North Hub",
     "save": "Save changes",
@@ -328,6 +330,7 @@
       "invalidInput": "Name cannot be empty.",
       "unauthenticated": "You need to sign in to edit your profile.",
       "invalidPhone": "Please enter a valid phone number for the selected country.",
+      "invalidRegion": "Please pick a valid country and time zone.",
       "generic": "Could not save the changes. Please try again."
     },
     "dangerZone": {

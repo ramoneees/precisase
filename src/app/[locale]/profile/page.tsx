@@ -65,6 +65,8 @@ profile={{
           phoneE164: user.phoneE164,
           phoneCountry: user.country,
           churchAffiliation: user.churchAffiliation,
+          country: user.country,
+          timeZone: user.timeZone,
           role: user.role,
           uiLocale: user.uiLocale,
         }}

@@ -319,6 +319,8 @@
     "phoneLabel": "Telefone",
     "phonePlaceholder": "912 345 678",
     "phoneCountryLabel": "País",
+    "countryLabel": "País",
+    "timeZoneLabel": "Fuso horário",
     "churchAffiliationLabel": "Comunidade / igreja (opcional)",
     "churchAffiliationPlaceholder": "Ex: Casa da Cidade — Núcleo Norte",
     "save": "Guardar alterações",
@@ -328,6 +330,7 @@
       "invalidInput": "O nome não pode ficar vazio.",
       "unauthenticated": "Precisas de entrar para editar o teu perfil.",
       "invalidPhone": "Introduz um número de telefone válido para o país selecionado.",
+      "invalidRegion": "Seleciona um país e fuso horário válidos.",
       "generic": "Não foi possível guardar as alterações. Tenta novamente."
     },
     "dangerZone": {

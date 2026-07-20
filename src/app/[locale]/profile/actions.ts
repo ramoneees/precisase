@@ -15,9 +15,17 @@ import {
 } from "@/server/services/account-deletion-service";
 import { PhoneService, type CountryCode } from "@/server/services/phone-service";
 import { routing, type AppLocale } from "@/i18n/routing";
+import {
+  PROFILE_COUNTRY_CODES,
+  timeZoneOptionsForCountry,
+} from "@/lib/region-defaults";
 
 function isSupportedLocale(locale: string): locale is AppLocale {
   return (routing.locales as readonly string[]).includes(locale);
+}
+
+function isValidCountry(value: string): boolean {
+  return PROFILE_COUNTRY_CODES.has(value.toUpperCase());
 }
 
 // ---------------------------------------------------------------------
@@ -28,6 +36,7 @@ export type UpdateProfileErrorCode =
   | "unauthenticated"
   | "invalidInput"
   | "invalidPhone"
+  | "invalidRegion"
   | "generic";
 
 export type UpdateProfileResult = { ok: true } | { ok: false; error: UpdateProfileErrorCode };
@@ -39,6 +48,10 @@ export interface UpdateProfileInput {
   /** Free-form phone value (will be normalized server-side). */
   phoneE164: string;
   churchAffiliation: string;
+  /** ISO 3166-1 alpha-2 — the user's country (drives defaults). */
+  country: string;
+  /** IANA zone — must be valid for the chosen `country`. */
+  timeZone: string;
   locale: string;
 }
 
@@ -73,10 +86,20 @@ export async function updateProfileAction(
   }
   const churchAffiliation = input.churchAffiliation?.trim() || null;
 
+  // Country + time-zone validation (FR13 region fields). The country must
+  // be in the supported set; the time zone must be one of the zones offered
+  // for that country (see `timeZoneOptionsForCountry`). Rejecting here
+  // keeps the column from receiving arbitrary user-supplied IANA strings.
+  const country = input.country?.trim().toUpperCase() ?? "";
+  const timeZone = input.timeZone?.trim() ?? "";
+  if (!isValidCountry(country) || !timeZoneOptionsForCountry(country).includes(timeZone)) {
+    return { ok: false, error: "invalidRegion" };
+  }
+
   try {
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { displayName, phoneE164: normalizedPhoneE164, churchAffiliation },
+      data: { displayName, phoneE164: normalizedPhoneE164, churchAffiliation, country, timeZone },
     });
   } catch {
     return { ok: false, error: "generic" };

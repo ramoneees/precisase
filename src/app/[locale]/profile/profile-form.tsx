@@ -4,6 +4,11 @@ import { useState, useTransition, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/components/ui/toast-provider";
 import { updateProfileAction, type UpdateProfileErrorCode } from "./actions";
+import {
+  PROFILE_COUNTRY_OPTIONS,
+  defaultTimeZoneFor,
+  timeZoneOptionsForCountry,
+} from "@/lib/region-defaults";
 
 export interface ProfileFormData {
   email: string;
@@ -12,6 +17,10 @@ export interface ProfileFormData {
   /** ISO 3166-1 alpha-2 — used as the parsing hint for `phoneE164`. */
   phoneCountry: string | null;
   churchAffiliation: string | null;
+  /** ISO 3166-1 alpha-2 — drives the time-zone option list. */
+  country: string | null;
+  /** IANA zone — must be valid for the chosen country. */
+  timeZone: string | null;
   role: "user" | "moderator" | "admin";
   uiLocale: string;
 }
@@ -19,9 +28,9 @@ export interface ProfileFormData {
 /**
  * Profile form (FR13). Copy comes entirely from the `profile` namespace —
  * no hardcoded user-facing strings (docs/ARCHITECTURE.md §4.6/§10 hard
- * rule). Editable: displayName, phoneE164, churchAffiliation. Read-only:
- * email (login identifier — see actions.ts doc comment for why it isn't
- * editable here), role, locale.
+ * rule). Editable: displayName, phoneE164, churchAffiliation, country,
+ * timeZone. Read-only: email (login identifier — see actions.ts doc
+ * comment for why it isn't editable here), role, locale.
  */
 export function ProfileForm({
   profile,
@@ -40,7 +49,21 @@ export function ProfileForm({
   const [churchAffiliation, setChurchAffiliation] = useState(
     profile.churchAffiliation ?? "",
   );
+  const [country, setCountry] = useState(profile.country ?? "PT");
+  const [timeZone, setTimeZone] = useState(
+    profile.timeZone ?? defaultTimeZoneFor(profile.country) ?? "Europe/Lisbon",
+  );
   const [error, setError] = useState<UpdateProfileErrorCode | null>(null);
+
+  function handleCountryChange(nextCountry: string) {
+    setCountry(nextCountry);
+    // Reset the time zone to the new country's default so the two fields
+    // never disagree (validated server-side in updateProfileAction).
+    const nextDefault = defaultTimeZoneFor(nextCountry);
+    if (nextDefault) {
+      setTimeZone(nextDefault);
+    }
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,6 +80,8 @@ export function ProfileForm({
         phoneCountry,
         phoneE164,
         churchAffiliation,
+        country,
+        timeZone,
         locale,
       });
 
@@ -76,6 +101,8 @@ export function ProfileForm({
   { code: "GB", label: "United Kingdom (+44)" },
   { code: "ES", label: "España (+34)" },
 ];
+
+  const timeZoneOptions = timeZoneOptionsForCountry(country);
 
 return (
     <form
@@ -171,6 +198,46 @@ return (
           placeholder={t("churchAffiliationPlaceholder")}
           className="rounded-xl border border-[#E3DED2] bg-white px-3.5 py-2.5 text-sm text-[#232922] placeholder:text-[#9AA098] focus:border-[#2F6B4F] focus:outline-none"
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="profile-country" className="text-sm font-medium text-[#232922]">
+            {t("countryLabel")}
+          </label>
+          <select
+            id="profile-country"
+            name="country"
+            value={country}
+            onChange={(event) => handleCountryChange(event.target.value)}
+            className="rounded-xl border border-[#E3DED2] bg-white px-3.5 py-2.5 text-sm text-[#232922] focus:border-[#2F6B4F] focus:outline-none"
+          >
+            {PROFILE_COUNTRY_OPTIONS.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="profile-time-zone" className="text-sm font-medium text-[#232922]">
+            {t("timeZoneLabel")}
+          </label>
+          <select
+            id="profile-time-zone"
+            name="timeZone"
+            value={timeZone}
+            onChange={(event) => setTimeZone(event.target.value)}
+            className="rounded-xl border border-[#E3DED2] bg-white px-3.5 py-2.5 text-sm text-[#232922] focus:border-[#2F6B4F] focus:outline-none"
+          >
+            {timeZoneOptions.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error ? (

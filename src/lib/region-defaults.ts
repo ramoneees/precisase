@@ -142,3 +142,38 @@ export function defaultCurrencyForUiLocale(uiLocale: string): string {
       return "USD";
   }
 }
+
+// ---------------------------------------------------------------------
+// Profile-form country / time-zone options
+// ---------------------------------------------------------------------
+
+/**
+ * Curated country list surfaced in the profile form's `<select>`. Kept
+ * narrow on purpose — matches the `PHONE_COUNTRIES` list in
+ * `profile-form.tsx` so phone-country and country stays in lockstep.
+ * Adding a country here requires a row in `COUNTRIES` above.
+ */
+export const PROFILE_COUNTRY_OPTIONS: ReadonlyArray<{ code: CountryCode; label: string }> = [
+  { code: "PT", label: "Portugal (+351)" },
+  { code: "BR", label: "Brasil (+55)" },
+  { code: "US", label: "United States (+1)" },
+  { code: "GB", label: "United Kingdom (+44)" },
+  { code: "ES", label: "España (+34)" },
+];
+
+/** The set of country codes the profile form accepts (for validation). */
+export const PROFILE_COUNTRY_CODES: ReadonlySet<CountryCode> = new Set(
+  PROFILE_COUNTRY_OPTIONS.map((c) => c.code),
+);
+
+/**
+ * Time-zone options surfaced for a given country in the profile form.
+ * MVP scope: one zone per country (the IANA default from `COUNTRIES`).
+ * The array shape leaves room to expand to multi-zone countries (US, BR)
+ * without churning callers. Returns `[]` for unknown countries so the
+ * form can prompt the user to pick a country first.
+ */
+export function timeZoneOptionsForCountry(country: CountryCode | null | undefined): ReadonlyArray<string> {
+  const defaults = getCountryDefaults(country);
+  return defaults ? [defaults.timeZone] : [];
+}
