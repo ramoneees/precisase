@@ -80,7 +80,7 @@ Casa da Cidade ("Precisa-se") community matching platform — Next.js 16 / Prism
 - **Do not put `contactValue` plaintext in logs.** PII; encrypted at the repository layer.
 - **Do not use hardcoded Portuguese/English strings in JSX.** Add to `messages/<locale>.json`. The CI parity check is a TODO; for now, grep all three files when adding a key.
 - **Do not touch `User.country` etc. without going through `signin/signup` profile flows** — the columns feed the session augmentation chain (`session.user.country/timeZone/currency`).
-- **Do not block on PostService atomicity** (transactions in `$transaction`) — known gap (C6 in the most recent code-review); the four-write sequences (update + audit + notification + moderation-action) can race on crash. Fix is documented; not in MVP scope.
+- **PostService transitions are atomic** — each state-transition method wraps its read+write sequence in `repo.withTransaction(fn)` (Prisma-backed impl uses `prisma.$transaction`). C6 is closed. New transition methods must follow the `withTransaction` shell + `*Tx` body pattern (see `post-service.ts`).
 - **Do not use `findFirst` where `findUnique` would work** on a unique column.
 
 ## UNIQUE STYLES

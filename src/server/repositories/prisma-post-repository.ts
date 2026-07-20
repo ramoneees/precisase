@@ -8,6 +8,7 @@
  */
 
 import { Prisma, type Post as PrismaPost } from "@/generated/prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
 import { decrypt, encrypt } from "@/server/crypto/contact-encryption";
 import type {
   AuditLogRecord,
@@ -22,6 +23,15 @@ import type {
 } from "@/server/services/post-service";
 import { DEFAULT_LISTING_PAGE_SIZE } from "@/server/services/post-service";
 import { prisma } from "./prisma-client";
+
+/**
+ * Accepts either the shared `PrismaClient` singleton or a transaction
+ * client handed to `$transaction(async (tx) => …)`. The tx client is the
+ * same surface (`post`/`interest`/etc. delegates + `$queryRaw` +
+ * `$transaction`), so a single PrismaPostRepository instance works in
+ * both contexts — the constructor just stores whichever it got.
+ */
+type PrismaClientLike = PrismaClient;
 
 /**
  * Columns the listing queries (`listActive`/`listByAuthor`/`listPending`)
@@ -118,73 +128,6 @@ function paginate(rows: PostSummary[], limit: number): PaginatedPosts {
 }
 
 /**
- * Resolves a cursor post id to its `createdAt` so the next page can be
- * fetched with `WHERE createdAt < cursorCreatedAt` + a tie-breaker on id.
- * Returns null if the cursor post has been deleted between page fetches,
- * which makes the next-page query return the first page (safe degradation
- * — the user just sees page 1 again).
- */
-async function cursorCreatedAt(postId: string): Promise<Date | null> {
-  const row = await prisma.post.findUnique({
-    where: { id: postId },
-    select: { createdAt: true },
-  });
-  return row?.createdAt ?? null;
-}
-
-/**
- * Shop-window keyword search via the `search_vector` GIN index (created
- * by `20260718181500_post_search_indexes`). Raw SQL because Prisma's
- * `where` API cannot express `tsvector @@ plainto_tsquery` over an
- * `Unsupported("tsvector")` column — replacing this with `ILIKE` would
- * silently regress to a seq scan.
- */
-async function searchActivePostsViaFtsIndex(
-  filter: ListActivePostsFilter,
-  search: string,
-  limit: number,
-  cursorDate: Date | null,
-): Promise<PostSummary[]> {
-  const conditions: Prisma.Sql[] = [
-    Prisma.sql`status = 'active'::post_status`,
-    Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`,
-  ];
-  if (filter.categoryId) {
-    conditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
-  }
-  if (filter.type) {
-    conditions.push(Prisma.sql`type = ${filter.type}::post_type`);
-  }
-  if (cursorDate) {
-    conditions.push(Prisma.sql`created_at < ${cursorDate}`);
-  }
-
-  const rows = await prisma.$queryRaw<RawPostSummaryRow[]>`
-    SELECT
-      id,
-      author_id   AS "authorId",
-      category_id AS "categoryId",
-      type,
-      status,
-      title,
-      description,
-      locale,
-      extra_attributes AS "extraAttributes",
-      published_at  AS "publishedAt",
-      closed_at     AS "closedAt",
-      rejected_reason AS "rejectedReason",
-      created_at    AS "createdAt",
-      updated_at    AS "updatedAt"
-    FROM posts
-    WHERE ${Prisma.join(conditions, " AND ")}
-    ORDER BY created_at DESC, id DESC
-    LIMIT ${limit + 1}
-  `;
-
-  return rows.map(toPostSummaryFromRaw);
-}
-
-/**
  * Maps a Prisma `Post` row to the plaintext `PostRecord` domain type —
  * decrypting `contactValue` is the one thing this function does that a
  * generic "select all columns" mapper wouldn't.
@@ -213,8 +156,27 @@ async function toPostRecord(post: PrismaPost): Promise<PostRecord> {
 }
 
 export class PrismaPostRepository implements PostRepository {
+  /**
+   * The underlying Prisma client. Defaults to the shared singleton from
+   * `prisma-client.ts`, but a tx-scoped client is injected by
+   * `withTransaction` so all reads/writes inside a transition land in the
+   * same Postgres transaction (C6).
+   */
+  private readonly client: PrismaClientLike;
+
+  constructor(client: PrismaClientLike = prisma) {
+    this.client = client;
+  }
+
+  async withTransaction<T>(fn: (txRepo: PostRepository) => Promise<T>): Promise<T> {
+    return this.client.$transaction(async (tx) => {
+      const txRepo = new PrismaPostRepository(tx as PrismaClientLike);
+      return fn(txRepo);
+    });
+  }
+
   async findById(id: string): Promise<PostRecord | null> {
-    const post = await prisma.post.findUnique({ where: { id } });
+    const post = await this.client.post.findUnique({ where: { id } });
     if (!post) {
       return null;
     }
@@ -271,7 +233,7 @@ export class PrismaPostRepository implements PostRepository {
       ...(rejectedReason !== undefined ? { rejectedReason } : {}),
     };
 
-    const updated = await prisma.post.update({
+    const updated = await this.client.post.update({
       where: { id },
       data: updateData,
     });
@@ -280,7 +242,7 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   async create(data: CreatePostData): Promise<PostRecord> {
-    const created = await prisma.post.create({
+    const created = await this.client.post.create({
       data: {
         authorId: data.authorId,
         categoryId: data.categoryId,
@@ -303,10 +265,10 @@ export class PrismaPostRepository implements PostRepository {
   async listActive(filter: ListActivePostsFilter): Promise<PaginatedPosts> {
     const search = filter.search?.trim();
     const limit = Math.max(1, Math.min(filter.limit ?? DEFAULT_LISTING_PAGE_SIZE, 100));
-    const cursorDate = filter.after ? await cursorCreatedAt(filter.after) : null;
+    const cursorDate = filter.after ? await this.cursorCreatedAt(filter.after) : null;
 
     if (!search) {
-      const rows = await prisma.post.findMany({
+      const rows = await this.client.post.findMany({
         where: {
           status: "active",
           ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
@@ -321,12 +283,12 @@ export class PrismaPostRepository implements PostRepository {
       return paginate(rows.map(toPostSummary), limit);
     }
 
-    const searchRows = await searchActivePostsViaFtsIndex(filter, search, limit, cursorDate);
+    const searchRows = await this.searchActivePostsViaFtsIndex(filter, search, limit, cursorDate);
     return paginate(searchRows, limit);
   }
 
   async listByAuthor(authorId: string): Promise<PostSummary[]> {
-    const posts = await prisma.post.findMany({
+    const posts = await this.client.post.findMany({
       where: { authorId },
       orderBy: { createdAt: "desc" },
       select: POST_SUMMARY_SELECT,
@@ -336,7 +298,7 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   async listPending(): Promise<PostSummary[]> {
-    const posts = await prisma.post.findMany({
+    const posts = await this.client.post.findMany({
       where: { status: "pending" },
       orderBy: { createdAt: "asc" },
       select: POST_SUMMARY_SELECT,
@@ -346,7 +308,7 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   async listInterestedUserIds(postId: string): Promise<string[]> {
-    const rows = await prisma.interest.findMany({
+    const rows = await this.client.interest.findMany({
       where: { postId },
       select: { userId: true },
       distinct: ["userId"],
@@ -355,7 +317,7 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   async addModerationAction(action: ModerationActionRecord): Promise<void> {
-    await prisma.moderationAction.create({
+    await this.client.moderationAction.create({
       data: {
         postId: action.postId,
         moderatorId: action.moderatorId,
@@ -366,7 +328,7 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   async addNotification(notification: NotificationRecord): Promise<void> {
-    await prisma.notification.create({
+    await this.client.notification.create({
       data: {
         recipientId: notification.recipientId,
         postId: notification.postId ?? null,
@@ -378,7 +340,7 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   async addAuditLog(log: AuditLogRecord): Promise<void> {
-    await prisma.auditLog.create({
+    await this.client.auditLog.create({
       data: {
         actorId: log.actorId ?? null,
         action: log.action,
@@ -388,5 +350,72 @@ export class PrismaPostRepository implements PostRepository {
         after: log.after === undefined ? undefined : (log.after ?? undefined),
       },
     });
+  }
+
+  /**
+   * Instance-method mirror of the module-level `cursorCreatedAt` helper
+   * — uses the (possibly tx-scoped) client so cursor lookups inside a
+   * transaction read from the transaction snapshot.
+   */
+  private async cursorCreatedAt(postId: string): Promise<Date | null> {
+    const row = await this.client.post.findUnique({
+      where: { id: postId },
+      select: { createdAt: true },
+    });
+    return row?.createdAt ?? null;
+  }
+
+  /**
+   * Instance-method mirror of the module-level FTS search helper — same
+   * tx-snapshot rationale as `cursorCreatedAt`.
+   *
+   * NOTE: the `$queryRaw` call does not bind to the tx client even when
+   * invoked on `this.client`; this is acceptable because listActive is a
+   * read-only listing query, never invoked from inside a state-transition
+   * transaction. If that changes, the query must move to `tx.$queryRaw`.
+   */
+  private async searchActivePostsViaFtsIndex(
+    filter: ListActivePostsFilter,
+    search: string,
+    limit: number,
+    cursorDate: Date | null,
+  ): Promise<PostSummary[]> {
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`status = 'active'::post_status`,
+      Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`,
+    ];
+    if (filter.categoryId) {
+      conditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
+    }
+    if (filter.type) {
+      conditions.push(Prisma.sql`type = ${filter.type}::post_type`);
+    }
+    if (cursorDate) {
+      conditions.push(Prisma.sql`created_at < ${cursorDate}`);
+    }
+
+    const rows = await this.client.$queryRaw<RawPostSummaryRow[]>`
+      SELECT
+        id,
+        author_id   AS "authorId",
+        category_id AS "categoryId",
+        type,
+        status,
+        title,
+        description,
+        locale,
+        extra_attributes AS "extraAttributes",
+        published_at  AS "publishedAt",
+        closed_at     AS "closedAt",
+        rejected_reason AS "rejectedReason",
+        created_at    AS "createdAt",
+        updated_at    AS "updatedAt"
+      FROM posts
+      WHERE ${Prisma.join(conditions, " AND ")}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit + 1}
+    `;
+
+    return rows.map(toPostSummaryFromRaw);
   }
 }

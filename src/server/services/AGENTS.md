@@ -44,7 +44,7 @@ src/server/services/
 - **Do not import from `@/generated/prisma/client` here.** Services are port-driven; only the repository implementations know about Prisma.
 - **Do not call `parsePhoneNumberFromString("...", "PT")` directly.** Use `PhoneService.parse` so the country hint, dedup, and error code are consistent.
 - **Do not put `contactValue` plaintext in logs.** PII; encrypted at the repository layer.
-- **Do not block on PostService atomicity** (transactions in `$transaction`) — known gap (C6 in the most recent code-review); the four-write sequences (update + audit + notification + moderation-action) can race on crash. Fix is documented; not in MVP scope.
+- **PostService state transitions are atomic.** Each transition method (`approvePost`/`rejectPost`/`closePost`/`reopenPost`/`resubmitPost`/`createPost`/`editActivePost`) wraps its full read+write sequence in `repo.withTransaction(fn)`; the Prisma-backed repo implements it via `prisma.$transaction`. C6 is closed. New transition methods must follow the same `withTransaction` shell + `*Tx` body pattern.
 
 ## UNIQUE STYLES
 

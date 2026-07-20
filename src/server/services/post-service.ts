@@ -200,6 +200,16 @@ export interface PostRepository {
   addModerationAction(action: ModerationActionRecord): Promise<void>;
   addNotification(notification: NotificationRecord): Promise<void>;
   addAuditLog(log: AuditLogRecord): Promise<void>;
+  /**
+   * Runs `fn` against a repository view scoped to a single database
+   * transaction (C6). Every read/write inside `fn` commits atomically;
+   * if `fn` throws, the whole sequence rolls back so a crash mid-way can
+   * never leave a half-applied state transition (post updated but audit
+   * log missing, etc.). The Prisma-backed implementation wraps this in
+   * `prisma.$transaction`; the in-memory test fake just invokes `fn`
+   * directly (synchronous, no real atomicity needed).
+   */
+  withTransaction<T>(fn: (txRepo: PostRepository) => Promise<T>): Promise<T>;
 }
 
 // ---------------------------------------------------------------------
@@ -310,6 +320,19 @@ function isModerator(actor: Actor): boolean {
   return actor.role === "moderator" || actor.role === "admin";
 }
 
+/**
+ * Module-level equivalent of the previous `requirePost` instance method,
+ * callable inside a `withTransaction` block against the tx-scoped repo
+ * (passed as `repo`). Throws `PostNotFoundError` if the post is absent.
+ */
+async function requirePostOn(repo: PostRepository, postId: string): Promise<PostRecord> {
+  const post = await repo.findById(postId);
+  if (!post) {
+    throw new PostNotFoundError(postId);
+  }
+  return post;
+}
+
 function buildPostAuditEntry(args: {
   actorId: string;
   action: string;
@@ -338,9 +361,29 @@ export class PostService {
     return post;
   }
 
+  /**
+   * Public state-transition methods (below) wrap their full read+write
+   * sequence in `repo.withTransaction` (C6) so the post update, audit
+   * log, notifications, and moderation action commit atomically — a
+   * crash mid-sequence can no longer leave a half-applied transition.
+   *
+   * The pattern: each public method is a thin `withTransaction` shell
+   * that delegates to a `*Tx` private method taking the tx-scoped repo.
+   * Guards (RBAC, status, BR04) live in the `*Tx` body and throw before
+   * any write, so a failed guard rolls back the (empty) transaction
+   * cheaply.
+   */
+
   /** pending -> active (FR15). Only a moderator/admin may approve. */
-  async approvePost({ postId, moderator }: ApprovePostInput): Promise<PostRecord> {
-    const post = await this.requirePost(postId);
+  async approvePost(input: ApprovePostInput): Promise<PostRecord> {
+    return this.repo.withTransaction((tx) => this.approvePostTx(tx, input));
+  }
+
+  private async approvePostTx(
+    repo: PostRepository,
+    { postId, moderator }: ApprovePostInput,
+  ): Promise<PostRecord> {
+    const post = await requirePostOn(repo, postId);
 
     if (!isModerator(moderator)) {
       throw new UnauthorizedPostActionError(
@@ -353,18 +396,18 @@ export class PostService {
     }
 
     const publishedAt = new Date();
-    const updated = await this.repo.update(postId, {
+    const updated = await repo.update(postId, {
       status: "active",
       publishedAt,
     });
 
-    await this.repo.addModerationAction({
+    await repo.addModerationAction({
       postId,
       moderatorId: moderator.id,
       action: "approve",
     });
 
-    await this.repo.addNotification({
+    await repo.addNotification({
       recipientId: post.authorId,
       postId,
       type: "post_approved",
@@ -372,7 +415,7 @@ export class PostService {
       payload: { postId, title: post.title },
     });
 
-    await this.repo.addAuditLog(
+    await repo.addAuditLog(
       buildPostAuditEntry({
         actorId: moderator.id,
         action: "post.approve",
@@ -386,8 +429,15 @@ export class PostService {
   }
 
   /** pending -> rejected (FR15). Only a moderator/admin may reject; a reason is required. */
-  async rejectPost({ postId, moderator, reason }: RejectPostInput): Promise<PostRecord> {
-    const post = await this.requirePost(postId);
+  async rejectPost(input: RejectPostInput): Promise<PostRecord> {
+    return this.repo.withTransaction((tx) => this.rejectPostTx(tx, input));
+  }
+
+  private async rejectPostTx(
+    repo: PostRepository,
+    { postId, moderator, reason }: RejectPostInput,
+  ): Promise<PostRecord> {
+    const post = await requirePostOn(repo, postId);
 
     if (!isModerator(moderator)) {
       throw new UnauthorizedPostActionError(
@@ -403,19 +453,19 @@ export class PostService {
       throw new ModerationReasonRequiredError();
     }
 
-    const updated = await this.repo.update(postId, {
+    const updated = await repo.update(postId, {
       status: "rejected",
       rejectedReason: reason,
     });
 
-    await this.repo.addModerationAction({
+    await repo.addModerationAction({
       postId,
       moderatorId: moderator.id,
       action: "reject",
       reason,
     });
 
-    await this.repo.addNotification({
+    await repo.addNotification({
       recipientId: post.authorId,
       postId,
       type: "post_rejected",
@@ -423,7 +473,7 @@ export class PostService {
       payload: { postId, title: post.title, reason },
     });
 
-    await this.repo.addAuditLog(
+    await repo.addAuditLog(
       buildPostAuditEntry({
         actorId: moderator.id,
         action: "post.reject",
@@ -440,8 +490,15 @@ export class PostService {
    * active -> closed (FR04, BR03). Only the post's author or a
    * moderator/admin may close it.
    */
-  async closePost({ postId, actor }: ClosePostInput): Promise<PostRecord> {
-    const post = await this.requirePost(postId);
+  async closePost(input: ClosePostInput): Promise<PostRecord> {
+    return this.repo.withTransaction((tx) => this.closePostTx(tx, input));
+  }
+
+  private async closePostTx(
+    repo: PostRepository,
+    { postId, actor }: ClosePostInput,
+  ): Promise<PostRecord> {
+    const post = await requirePostOn(repo, postId);
 
     const isAuthor = actor.id === post.authorId;
     if (!isAuthor && !isModerator(actor)) {
@@ -455,7 +512,7 @@ export class PostService {
     }
 
     const closedAt = new Date();
-    const updated = await this.repo.update(postId, {
+    const updated = await repo.update(postId, {
       status: "closed",
       closedAt,
     });
@@ -465,10 +522,10 @@ export class PostService {
     // with multiple interests gets one notification, not N. The
     // notification worker dispatches them via the existing email-template
     // path (email-templates.ts:134).
-    const interestedUserIds = await this.repo.listInterestedUserIds(postId);
+    const interestedUserIds = await repo.listInterestedUserIds(postId);
     await Promise.all(
       interestedUserIds.map((userId) =>
-        this.repo.addNotification({
+        repo.addNotification({
           recipientId: userId,
           postId,
           type: "post_closed",
@@ -478,7 +535,7 @@ export class PostService {
       ),
     );
 
-    await this.repo.addAuditLog(
+    await repo.addAuditLog(
       buildPostAuditEntry({
         actorId: actor.id,
         action: "post.close",
@@ -492,8 +549,15 @@ export class PostService {
   }
 
   /** closed -> active (FR05). Only the post's author may reopen it. */
-  async reopenPost({ postId, actor }: ReopenPostInput): Promise<PostRecord> {
-    const post = await this.requirePost(postId);
+  async reopenPost(input: ReopenPostInput): Promise<PostRecord> {
+    return this.repo.withTransaction((tx) => this.reopenPostTx(tx, input));
+  }
+
+  private async reopenPostTx(
+    repo: PostRepository,
+    { postId, actor }: ReopenPostInput,
+  ): Promise<PostRecord> {
+    const post = await requirePostOn(repo, postId);
 
     if (actor.id !== post.authorId) {
       throw new UnauthorizedPostActionError(
@@ -505,12 +569,12 @@ export class PostService {
       throw new InvalidPostTransitionError(post.status, "active");
     }
 
-    const updated = await this.repo.update(postId, {
+    const updated = await repo.update(postId, {
       status: "active",
       closedAt: null,
     });
 
-    await this.repo.addAuditLog(
+    await repo.addAuditLog(
       buildPostAuditEntry({
         actorId: actor.id,
         action: "post.reopen",
@@ -527,8 +591,15 @@ export class PostService {
    * rejected -> pending (FR03). Only the post's author may edit and
    * resubmit; re-approval is required (safer than auto-re-publishing).
    */
-  async resubmitPost({ postId, actor, updates }: ResubmitPostInput): Promise<PostRecord> {
-    const post = await this.requirePost(postId);
+  async resubmitPost(input: ResubmitPostInput): Promise<PostRecord> {
+    return this.repo.withTransaction((tx) => this.resubmitPostTx(tx, input));
+  }
+
+  private async resubmitPostTx(
+    repo: PostRepository,
+    { postId, actor, updates }: ResubmitPostInput,
+  ): Promise<PostRecord> {
+    const post = await requirePostOn(repo, postId);
 
     if (actor.id !== post.authorId) {
       throw new UnauthorizedPostActionError(
@@ -547,13 +618,13 @@ export class PostService {
       );
     }
 
-    const updated = await this.repo.update(postId, {
+    const updated = await repo.update(postId, {
       ...updates,
       status: "pending",
       rejectedReason: null,
     });
 
-    await this.repo.addAuditLog(
+    await repo.addAuditLog(
       buildPostAuditEntry({
         actorId: actor.id,
         action: "post.resubmit",
@@ -577,9 +648,16 @@ export class PostService {
   async createPost(input: CreatePostInput): Promise<PostRecord> {
     this.requireContactInfo(input.contactMethod, input.contactValue);
 
-    const created = await this.repo.create(input);
+    return this.repo.withTransaction((tx) => this.createPostTx(tx, input));
+  }
 
-    await this.repo.addAuditLog(
+  private async createPostTx(
+    repo: PostRepository,
+    input: CreatePostInput,
+  ): Promise<PostRecord> {
+    const created = await repo.create(input);
+
+    await repo.addAuditLog(
       buildPostAuditEntry({
         actorId: input.authorId,
         action: "post.create",
@@ -599,8 +677,15 @@ export class PostService {
    * involved in a self-edit, and `ModerationAction.moderatorId` is
    * non-nullable in the schema).
    */
-  async editActivePost({ postId, actor, updates }: EditActivePostInput): Promise<PostRecord> {
-    const post = await this.requirePost(postId);
+  async editActivePost(input: EditActivePostInput): Promise<PostRecord> {
+    return this.repo.withTransaction((tx) => this.editActivePostTx(tx, input));
+  }
+
+  private async editActivePostTx(
+    repo: PostRepository,
+    { postId, actor, updates }: EditActivePostInput,
+  ): Promise<PostRecord> {
+    const post = await requirePostOn(repo, postId);
 
     if (actor.id !== post.authorId) {
       throw new UnauthorizedPostActionError("Only the post's author can edit it.");
@@ -617,9 +702,9 @@ export class PostService {
       );
     }
 
-    const updated = await this.repo.update(postId, updates);
+    const updated = await repo.update(postId, updates);
 
-    await this.repo.addAuditLog(
+    await repo.addAuditLog(
       buildPostAuditEntry({
         actorId: actor.id,
         action: "post.edit",

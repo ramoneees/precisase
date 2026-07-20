@@ -30,6 +30,14 @@ class InMemoryPostRepository implements PostRepository {
   readonly moderationActions: ModerationActionRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
+  /**
+   * Count of `withTransaction` invocations — lets the C6 tests assert
+   * that the public transition methods actually entered a transaction.
+   * The fake's `withTransaction` has no real atomicity (it just calls
+   * `fn(this)`), but the call count is the contract signal that the
+   * Prisma-backed implementation relies on for atomicity.
+   */
+  withTransactionCalls = 0;
   private nextId = 1;
 
   seed(post: PostRecord): void {
@@ -136,6 +144,17 @@ class InMemoryPostRepository implements PostRepository {
   async listInterestedUserIds(postId: string): Promise<string[]> {
     const entries = this.interests.get(postId) ?? [];
     return [...new Set(entries.map((e) => e.userId))];
+  }
+
+  /**
+   * Fake atomicity: in-memory, synchronous, no rollback semantics — just
+   * record the call and invoke `fn` against this same repo. The Prisma
+   * implementation wraps this in `prisma.$transaction`; the tests assert
+   * on `withTransactionCalls` rather than rollback behavior.
+   */
+  async withTransaction<T>(fn: (txRepo: PostRepository) => Promise<T>): Promise<T> {
+    this.withTransactionCalls += 1;
+    return fn(this);
   }
 }
 
@@ -828,6 +847,67 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       await expect(
         service.getPost({ postId: "missing", viewer: viewer("admin-1", "admin") }),
       ).rejects.toThrow(PostNotFoundError);
+    });
+  });
+
+  describe("withTransaction — atomic state transitions (C6)", () => {
+    it("every state-changing transition wraps its writes in withTransaction", async () => {
+      // Each transition gets its own seed so the state-guard checks pass.
+      repo.seed(makePost({ id: "p-approve", status: "pending" }));
+      repo.seed(makePost({ id: "p-reject", status: "pending" }));
+      repo.seed(makePost({ id: "p-close", status: "active" }));
+      repo.seed(makePost({ id: "p-reopen", status: "closed" }));
+      repo.seed(makePost({ id: "p-resubmit", status: "rejected" }));
+      repo.seed(makePost({ id: "p-edit", status: "active" }));
+
+      const callsBefore = repo.withTransactionCalls;
+
+      await service.approvePost({
+        postId: "p-approve",
+        moderator: actor("moderator-1", "moderator"),
+      });
+      await service.rejectPost({
+        postId: "p-reject",
+        moderator: actor("moderator-1", "moderator"),
+        reason: "no longer relevant",
+      });
+      await service.closePost({ postId: "p-close", actor: actor("author-1", "user") });
+      await service.reopenPost({ postId: "p-reopen", actor: actor("author-1", "user") });
+      await service.resubmitPost({
+        postId: "p-resubmit",
+        actor: actor("author-1", "user"),
+        updates: { title: "Resubmitted title" },
+      });
+      await service.editActivePost({
+        postId: "p-edit",
+        actor: actor("author-1", "user"),
+        updates: { title: "Edited title" },
+      });
+      await service.createPost(makeCreateInput());
+
+      // 7 distinct transitions → 7 transaction entries (createPost opens
+      // its transaction only after the BR04 guard passes).
+      expect(repo.withTransactionCalls - callsBefore).toBe(7);
+    });
+
+    it("createPost does NOT enter a transaction before the BR04 contact-info guard throws", async () => {
+      const callsBefore = repo.withTransactionCalls;
+
+      await expect(
+        service.createPost(makeCreateInput({ contactValue: "" })),
+      ).rejects.toThrow(ContactInfoRequiredError);
+
+      // The guard runs before `withTransaction`, so no transaction was opened.
+      expect(repo.withTransactionCalls).toBe(callsBefore);
+      expect(repo.posts.size).toBe(0);
+    });
+
+    it("getPost (a read-only path) does not open a transaction", async () => {
+      repo.seed(makePost({ status: "active" }));
+
+      const callsBefore = repo.withTransactionCalls;
+      await service.getPost({ postId: "post-1", viewer: null });
+      expect(repo.withTransactionCalls).toBe(callsBefore);
     });
   });
 });
