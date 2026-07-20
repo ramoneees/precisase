@@ -15,6 +15,16 @@
  * database (see post-service.test.ts). A Prisma-backed implementation of
  * `PostRepository` lives alongside the route handlers that wire this
  * service up to `src/generated/prisma`.
+ *
+ * Atomicity (C6, commit `316bc45`): every state-transition method
+ * (`createPost` / `approvePost` / `rejectPost` / `closePost` / `reopenPost`
+ * / `resubmitPost` / `editActivePost`) is a thin shell that delegates to a
+ * private `*Tx` body running inside `repo.withTransaction(fn)`. The full
+ * read+write sequence — status guard, RBAC check, post update, audit log,
+ * notification queue, moderation action — commits atomically via
+ * `prisma.$transaction`, so a crash mid-transition can never leave the row
+ * half-updated. New transition methods must follow the same shell+body
+ * pattern.
  */
 
 // ---------------------------------------------------------------------

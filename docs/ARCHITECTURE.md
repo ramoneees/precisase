@@ -352,6 +352,7 @@ stateDiagram-v2
 Notes:
 - `rejected → pending`: editing a rejected post resets it to `pending` (re-approval needed). This is safer than auto-re-publishing.
 - `active → pending` on edit is a **policy choice** (Q7); the default draft assumes edits to live posts keep them `active` but log a ModerationAction for visibility.
+- **Atomicity (C6, commit `316bc45`):** every transition is wrapped in `prisma.$transaction` via the `PostRepository.withTransaction` port, so the status update, audit log, notification queue, and moderation action commit together or not at all.
 
 ### 5.4 Extensibility hook (`extra_attributes`)
 
@@ -415,15 +416,18 @@ sequenceDiagram
 
     I->>W: Click "Express interest" (FR09)
     W->>S: expressInterest(postId, message)
-    S->>DB: INSERT Interest (unique post+user)
-    S->>DB: INSERT Notification(interest_received → author)
-    S->>DB: INSERT AuditLog
-    S-->>W: OK
+    S->>DB: INSERT Interest (unique post+user) — returns {record, created}
+    alt created (first interest for this post+user)
+        S->>DB: INSERT Notification(interest_received → author) status=queued
+    end
+    S-->>W: OK (existing record if not created)
     W-->>I: Show author contact_value (decrypted) + wa.me link
     N-->>DB: Poll queued
     N->>A: Email "Someone is interested"
     Note over I,A: Final negotiation happens off-platform<br/>(WhatsApp/phone) but it began on the shop window
 ```
+
+> **Idempotency (C7, commit `8c2e183`):** `expressInterest` is idempotent for a given `(postId, userId)` pair. The repository's `createInterest` returns `{ record, created }`; on the unique-constraint hit (concurrent or sequential duplicate), it surfaces the existing row with `created: false`, the service skips the notification, and the duplicate call returns the original record. No `AuditLog` row is written by this flow (only `PostService` transitions write audit entries).
 
 ### 6.3 Post closure → notify all interested users
 
