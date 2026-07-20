@@ -284,7 +284,7 @@ This is the **biggest gap closed in the latest patch**. It was previously missin
 | 2 | Cross-check: the date should match the post's `createdAt` in your browser's TZ | For Lisbon (Europe/Lisbon), a post created at 23:30 UTC on March 15 should show `15/03/2026`. For São Paulo (UTC-3), the same post should also show `15/03/2026` (since 23:30 UTC = 20:30 in São Paulo). |
 | 3 | For a post created at 02:00 UTC, verify the date rolls over correctly per TZ | pt-PT (Lisbon, UTC+0 in winter / UTC+1 in summer): at 02:00 UTC = 02:00 local → same day. For Asia/Tokyo (UTC+9): at 02:00 UTC = 11:00 local → same day. |
 
-> The platform ships `Europe/Lisbon` / `America/Sao_Paulo` / `America/New_York` as the time-zone defaults for pt-PT / pt-BR / en URL locales. Authenticated users can change their TZ via the profile page (but that feature isn't wired up yet — see "Known limitations" below).
+> The platform ships `Europe/Lisbon` / `America/Sao_Paulo` / `America/New_York` as the time-zone defaults for pt-PT / pt-BR / en URL locales. Authenticated users can change their country and time zone via the profile page (wired up in commit `606a134`).
 
 ✅ Pass when: dates are stable for any given UTC instant within the same calendar day across pt-PT / pt-BR / en visitors.
 ❌ Report if: the same post shows different dates within the same calendar day across the locales.
