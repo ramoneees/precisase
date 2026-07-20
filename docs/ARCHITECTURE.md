@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — "Precisa-se" (Casa da Cidade Community Platform)
 
-> **Status:** DRAFT v0.2 — for stakeholder review.
-> **Last updated:** 2026-07-12.
+> **Status:** DRAFT v0.3 — for stakeholder review.
+> **Last updated:** 2026-07-20.
 > **Audience:** project team (Ramon, Tiago, Rafaela, Rui, Gabriel, Rafael Santos) + implementing agents/LLMs.
 > **How to propose changes:** open a discussion at the next alignment meeting, then edit this file and bump the version. Mark anything contested with `Open question:` so unresolved items stay visible.
 
@@ -589,13 +589,15 @@ The architecture is intentionally **boring and additive**: each phase-2 feature 
 
 These are the decisions still required from the team. The implementing agent must surface them, not guess.
 
-- **Q1** — Backend language: Node/TypeScript (recommended) vs. Python.
+> **Resolved since v0.2** (kept in place with a `RESOLVED:` marker so the original rationale stays legible; see the commit referenced inline): Q1, Q3, Q4, Q5, Q7. The unresolved ones (Q2, Q6, Q8–Q19) are genuine stakeholder decisions — infra handoff, retention policy, moderation policy — and remain open.
+
+- **Q1** — Backend language: Node/TypeScript (recommended) vs. Python. **RESOLVED:** Node/TypeScript — current implementation.
 - **Q2** — Postgres: self-hosted in Docker (recommended for MVP) vs. managed cloud instance.
-- **Q3** — Auth: self-hosted Auth.js (recommended) vs. hosted provider (Clerk/Supabase/Keycloak).
-- **Q4** — MFA for moderator/admin: recommended yes.
-- **Q5** — Transactional email provider: Resend (recommended) vs. church SMTP vs. SES.
+- **Q3** — Auth: self-hosted Auth.js (recommended) vs. hosted provider (Clerk/Supabase/Keycloak). **RESOLVED:** self-hosted Auth.js v5 — see `src/auth.ts`.
+- **Q4** — MFA for moderator/admin: recommended yes. **RESOLVED:** TOTP MFA implemented (`src/server/services/mfa-service.ts`, `src/app/[locale]/account/mfa/`, `signin/mfa-challenge/`) — commit `014c755`.
+- **Q5** — Transactional email provider: Resend (recommended) vs. church SMTP vs. SES. **RESOLVED:** Resend (`src/server/notifications/mailer.ts`, `docs/ops/resend-setup.md`) — commit `014c755`.
 - **Q6** — Is Cloudflare TLS termination acceptable to Rafael Santos (church IT)?
-- **Q7** — Editing an *active* post: keep it `active` (recommended) or reset to `pending`?
+- **Q7** — Editing an *active* post: keep it `active` (recommended) or reset to `pending`? **RESOLVED:** keep `active` — `PostService.editActivePost` keeps status; the edit form deliberately omits type/category.
 - **Q8** — Audit-log retention after GDPR deletion — needs legal counsel (suggest 12 months pending).
 - **Q9** — On GDPR deletion, anonymize the user's Posts in place (recommended) or hard-delete them?
 - **Q10** — Backup retention schedule — confirm with church IT (suggested: 30 daily + 12 monthly).

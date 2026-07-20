@@ -338,13 +338,10 @@ A scenario counts as **passed** when the "Expected" column matches what you saw,
 
 These are known gaps that should NOT block sign-off. If you find them confusing, mention them but don't treat them as bugs:
 
-1. **Time-zone edit widget** — the user can have a TZ recorded (set at signup from the browser), but there's no profile UI to change it. Pick a different `country` setting in the profile form (eventually — currently the profile form doesn't expose country either).
-2. **Edit-active-post type/category change** — `PostService.editActivePost` deliberately doesn't allow changing `type` or `category` while a post is active (could be confusing for browsers looking at the page mid-edit). The form correctly omits those fields.
-3. **Email verification** — none. Anyone can sign up with any email.
-4. **No "forgot password"** — out of MVP scope.
-5. **Email delivery is dev-mode** — `ConsoleMailer` writes to `.dev-outbox/emails.jsonl`, not real inboxes. The notification worker IS real, but the mailer is stubbed.
-6. **C6 (atomicity of state transitions)** — if the process dies mid-state-change, the audit log could be inconsistent with the post state. Real but rare.
-7. **C7 (expressInterest TOCTOU)** — concurrent interest clicks from the same user may produce a "duplicate" error in the edge case, instead of being idempotent.
+1. **Edit-active-post type/category change** — `PostService.editActivePost` deliberately doesn't allow changing `type` or `category` while a post is active (could be confusing for browsers looking at the page mid-edit). The form correctly omits those fields.
+2. **Email verification** — none. Anyone can sign up with any email. Out of MVP scope (MVP.md §3.4).
+
+> **Recently closed (kept here for context):** profile country + time-zone editing (commit `606a134`), "forgot password" + Resend email backend (commit `014c755`), PostService state-transition atomicity / C6 (commit `316bc45`), expressInterest idempotency / C7 (commit `8c2e183`). Earlier reviewers may still reference these by their old names — they are no longer open.
 
 These are tracked in the existing code-review artifacts and are not MVP blockers.
 
