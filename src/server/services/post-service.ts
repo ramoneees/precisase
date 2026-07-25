@@ -301,7 +301,7 @@ export interface ResubmitPostInput {
   updates: Partial<
     Pick<
       PostRecord,
-      "title" | "description" | "categoryId" | "type" | "contactMethod" | "contactValue"
+      "title" | "description" | "categoryId" | "type" | "contactMethod" | "contactValue" | "extraAttributes"
     >
   >;
 }
