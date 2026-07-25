@@ -108,7 +108,7 @@ const USERS: UserFixture[] = [
 interface PostFixture {
   id: string;
   authorEmail: string;
-  categorySlug: "volunteering" | "donation";
+  categorySlug: "volunteering" | "donation" | "jobs";
   type: "request" | "offer";
   status: "pending" | "active" | "closed" | "rejected";
   title: string;
@@ -117,10 +117,12 @@ interface PostFixture {
   contactValue: string;
   locale: string;
   rejectedReason?: string;
+  extraAttributes?: Record<string, unknown>;
 }
 
 const VOLUNTEERING_CATEGORY_SLUG = "volunteering";
 const DONATION_CATEGORY_SLUG = "donation";
+const JOBS_CATEGORY_SLUG = "jobs";
 
 const POSTS: PostFixture[] = [
   {
@@ -228,6 +230,34 @@ const POSTS: PostFixture[] = [
     locale: "en",
     rejectedReason: "Please add the laptop model, condition, and pickup/delivery options before resubmitting.",
   },
+  {
+    id: "99999999-9999-9999-9999-999999999999",
+    authorEmail: "joao.santos@example.com",
+    categorySlug: JOBS_CATEGORY_SLUG,
+    type: "offer",
+    status: "active",
+    title: "Ofereço serviços de design gráfico",
+    description:
+      "Sou designer gráfico com 5 anos de experiência. Faço logótipos, branding, e material para redes sociais. Trabalho remoto, disponível para projetos pontuais.",
+    contactMethod: "email",
+    contactValue: "joao.santos@example.com",
+    locale: "pt-PT",
+    extraAttributes: { employmentType: "contract", salaryRange: "€500–€800/projeto", location: "Lisboa, remoto" },
+  },
+  {
+    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    authorEmail: "ana.silva@example.com",
+    categorySlug: JOBS_CATEGORY_SLUG,
+    type: "request",
+    status: "pending",
+    title: "Preciso de designer para logótipo da Casa da Cidade",
+    description:
+      "A Casa da Cidade precisa de um novo logótipo para a plataforma de voluntariado. Procuramos alguém com experiência em branding que possa trabalhar connosco durante 2-3 semanas.",
+    contactMethod: "email",
+    contactValue: "ana.silva@example.com",
+    locale: "pt-PT",
+    extraAttributes: { employmentType: "contract", location: "Lisboa" },
+  },
 ];
 
 interface InterestFixture {
@@ -275,19 +305,20 @@ async function main(): Promise<void> {
 
   try {
     for (const category of [
-      { slug: VOLUNTEERING_CATEGORY_SLUG, key: "category.volunteering" },
-      { slug: DONATION_CATEGORY_SLUG, key: "category.donation" },
+      { slug: VOLUNTEERING_CATEGORY_SLUG, key: "category.volunteering", isActive: true },
+      { slug: DONATION_CATEGORY_SLUG, key: "category.donation", isActive: true },
+      { slug: JOBS_CATEGORY_SLUG, key: "category.jobs", isActive: false },
     ] as const) {
       await prisma.category.upsert({
         where: { slug: category.slug },
-        update: { key: category.key },
-        create: { slug: category.slug, key: category.key },
+        update: { key: category.key, isActive: category.isActive },
+        create: { slug: category.slug, key: category.key, isActive: category.isActive },
       });
-      console.log(`[seed] category "${category.slug}" ready`);
+      console.log(`[seed] category "${category.slug}" ready (active: ${category.isActive})`);
     }
 
     const categoryIdBySlug = new Map<string, string>();
-    for (const slug of [VOLUNTEERING_CATEGORY_SLUG, DONATION_CATEGORY_SLUG]) {
+    for (const slug of [VOLUNTEERING_CATEGORY_SLUG, DONATION_CATEGORY_SLUG, JOBS_CATEGORY_SLUG]) {
       const c = await prisma.category.findUnique({ where: { slug } });
       if (!c) throw new Error(`category ${slug} missing after upsert`);
       categoryIdBySlug.set(slug, c.id);
@@ -349,6 +380,7 @@ async function main(): Promise<void> {
           rejectedReason: p.rejectedReason ?? null,
           publishedAt: p.status === "active" || p.status === "closed" ? new Date(Date.now() - 1000 * 60 * 60 * 24 * 3) : null,
           closedAt: p.status === "closed" ? new Date(Date.now() - 1000 * 60 * 60 * 24) : null,
+          extraAttributes: (p.extraAttributes ?? {}) as never,
         },
       });
       console.log(`[seed] post "${p.title}" created (${p.status}, ${p.locale})`);

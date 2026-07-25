@@ -24,6 +24,7 @@ export interface EditPostFormInitial {
   description: string;
   contactMethod: ContactMethodValue;
   contactValue: string;
+  extraAttributes?: Record<string, unknown>;
 }
 
 const PHONE_COUNTRIES: Array<{ code: string; label: string }> = [
@@ -74,6 +75,17 @@ export function EditPostForm({
   const [country, setCountry] = useState(phoneCountry);
   const [error, setError] = useState<EditPostErrorCode | null>(null);
 
+  // Job-specific fields
+  const [employmentType, setEmploymentType] = useState<string>(
+    (initial.extraAttributes?.employmentType as string) || ""
+  );
+  const [salaryRange, setSalaryRange] = useState<string>(
+    (initial.extraAttributes?.salaryRange as string) || ""
+  );
+  const [jobLocation, setJobLocation] = useState<string>(
+    (initial.extraAttributes?.location as string) || ""
+  );
+
   const isPhoneLike =
     contactMethod === "phone" || contactMethod === "whatsapp";
 
@@ -92,6 +104,14 @@ export function EditPostForm({
     }
 
     startTransition(async () => {
+      // Build extraAttributes for job-specific fields
+      const extraAttributes: Record<string, unknown> = {};
+      if (categoryId === "jobs") {
+        if (employmentType) extraAttributes.employmentType = employmentType;
+        if (salaryRange.trim()) extraAttributes.salaryRange = salaryRange.trim();
+        if (jobLocation.trim()) extraAttributes.location = jobLocation.trim();
+      }
+
       const payload = {
         postId,
         type,
@@ -101,6 +121,7 @@ export function EditPostForm({
         contactMethod,
         contactValue,
         phoneCountry: country,
+        extraAttributes,
       };
       const activePayload = {
         postId,
@@ -236,6 +257,59 @@ export function EditPostForm({
           className="rounded-xl border border-[#E3DED2] bg-white px-4 py-2.5 text-sm text-[#232922] placeholder:text-[#9AA098] focus:border-[#2F6B4F] focus:outline-none"
         />
       </div>
+
+      {categoryId === "jobs" && (
+        <>
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`${mode}-employment-type`} className="text-sm font-medium text-[#232922]">
+              {t("employmentType")}
+            </label>
+            <select
+              id={`${mode}-employment-type`}
+              name="employmentType"
+              value={employmentType}
+              onChange={(event) => setEmploymentType(event.target.value)}
+              className="rounded-xl border border-[#E3DED2] bg-white px-4 py-2.5 text-sm text-[#232922] focus:border-[#2F6B4F] focus:outline-none"
+            >
+              <option value="">{t("employmentTypeSelect")}</option>
+              <option value="full-time">{t("employmentTypeFullTime")}</option>
+              <option value="part-time">{t("employmentTypePartTime")}</option>
+              <option value="contract">{t("employmentTypeContract")}</option>
+              <option value="internship">{t("employmentTypeInternship")}</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`${mode}-salary-range`} className="text-sm font-medium text-[#232922]">
+              {t("salaryRange")}
+            </label>
+            <input
+              id={`${mode}-salary-range`}
+              name="salaryRange"
+              type="text"
+              value={salaryRange}
+              onChange={(event) => setSalaryRange(event.target.value)}
+              placeholder={t("salaryRangePlaceholder")}
+              className="rounded-xl border border-[#E3DED2] bg-white px-4 py-2.5 text-sm text-[#232922] placeholder:text-[#9AA098] focus:border-[#2F6B4F] focus:outline-none"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`${mode}-job-location`} className="text-sm font-medium text-[#232922]">
+              {t("jobLocation")}
+            </label>
+            <input
+              id={`${mode}-job-location`}
+              name="jobLocation"
+              type="text"
+              value={jobLocation}
+              onChange={(event) => setJobLocation(event.target.value)}
+              placeholder={t("jobLocationPlaceholder")}
+              className="rounded-xl border border-[#E3DED2] bg-white px-4 py-2.5 text-sm text-[#232922] placeholder:text-[#9AA098] focus:border-[#2F6B4F] focus:outline-none"
+            />
+          </div>
+        </>
+      )}
 
       <div className="flex flex-col gap-2">
         <label

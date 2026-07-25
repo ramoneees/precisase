@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
+import { brandingService } from "@/server/service-instances";
 import { LanguageSwitcher } from "./language-switcher";
 import { signOutAction } from "./sign-out-action";
 
@@ -24,6 +25,7 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
   const role = session?.user?.role;
   const isModerator = role === "moderator" || role === "admin";
   const displayName = session?.user?.name ?? null;
+  const branding = await brandingService.getConfig();
 
   // The MFA warn banner is driven by the `x-mfa-warn` header set in
   // `proxy.ts` (T18) during the warn-only enforcement window.
@@ -34,11 +36,22 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
       {warnMfa ? <MfaWarnBanner locale={locale} /> : null}
       <nav className="mx-auto flex max-w-[1100px] items-center justify-between gap-4 px-6 py-3">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#2F6B4F] font-heading text-sm font-extrabold text-white">
-            P
-          </span>
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={branding.siteName}
+              className="h-8 w-auto"
+            />
+          ) : (
+            <span
+              className="flex h-8 w-8 items-center justify-center rounded-[10px] font-heading text-sm font-extrabold text-white"
+              style={{ backgroundColor: branding.primaryColor }}
+            >
+              {branding.siteName[0]?.toUpperCase() || "P"}
+            </span>
+          )}
           <span className="font-heading text-lg font-extrabold text-[#232922]">
-            {t("brand")}
+            {branding.siteName}
           </span>
         </Link>
 
@@ -55,6 +68,11 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
           {isModerator ? (
             <Link href="/moderation" className="hover:text-[#2F6B4F]">
               {t("moderation")}
+            </Link>
+          ) : null}
+          {isModerator ? (
+            <Link href="/admin/settings" className="hover:text-[#2F6B4F]">
+              {t("settings")}
             </Link>
           ) : null}
         </div>

@@ -27,8 +27,8 @@ vi.mock("@/i18n/navigation", () => ({
 }));
 
 const categories = [
-  { id: "cat-1", slug: "volunteering", key: "category.volunteering" },
-  { id: "cat-2", slug: "donation", key: "category.donation" },
+  { id: "cat-1", slug: "volunteering", key: "category.volunteering", isActive: true },
+  { id: "cat-2", slug: "donation", key: "category.donation", isActive: true },
 ];
 
 function makeInitial(overrides: Partial<Parameters<typeof EditPostForm>[0]["initial"]> = {}) {

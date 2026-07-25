@@ -43,6 +43,8 @@ export interface CreatePostInput {
   consent: boolean;
   /** Relative URLs already uploaded via `/api/uploads` (up to 4). */
   photos: string[];
+  /** Optional extra attributes (e.g. job fields: employmentType, salaryRange, location). */
+  extraAttributes?: Record<string, unknown>;
   /** Optional override for `phone`/`whatsapp` parsing (server falls back to viewer country). */
   phoneCountry?: string;
 }
@@ -105,6 +107,10 @@ export async function createPostAction(
     ? input.photos.filter((photo) => typeof photo === "string" && photo.length > 0)
     : [];
 
+  // Merge photos into extraAttributes (form passes job fields + we add photos)
+  const extraAttributes: Record<string, unknown> = { ...(input.extraAttributes ?? {}) };
+  if (photos.length > 0) extraAttributes.photos = photos;
+
   try {
     const post = await postService.createPost({
       authorId: session.user.id,
@@ -115,7 +121,7 @@ export async function createPostAction(
       contactMethod: input.contactMethod,
       contactValue: normalizedContact,
       locale,
-      extraAttributes: photos.length > 0 ? { photos } : {},
+      extraAttributes,
     });
 
     revalidatePath(`/my-posts`);

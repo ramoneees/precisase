@@ -5,6 +5,7 @@
     "publish": "Post",
     "myPosts": "My posts",
     "moderation": "Moderation",
+    "settings": "Settings",
     "signIn": "Sign in",
     "signOut": "Sign out",
     "myAccount": "My account",
@@ -35,7 +36,8 @@
   },
   "category": {
     "volunteering": "Volunteering",
-    "donation": "Donation"
+    "donation": "Donation",
+    "jobs": "Employment"
   },
   "post": {
     "type": {
@@ -96,6 +98,15 @@
       "contactMethodLabel": "Preferred contact",
       "contactValueLabel": "Contact",
       "contactValuePlaceholder": "912 345 678",
+      "employmentType": "Employment type",
+      "employmentTypeFullTime": "Full-time",
+      "employmentTypePartTime": "Part-time",
+      "employmentTypeContract": "Contract",
+      "employmentTypeInternship": "Internship",
+      "salaryRange": "Salary range (optional)",
+      "salaryRangePlaceholder": "e.g. €800–€1200/month",
+      "jobLocation": "Location (optional)",
+      "jobLocationPlaceholder": "e.g. Lisbon, remote",
       "consentLabel": "I authorize Casa da Cidade to store and share my contact with people interested in this post, in accordance with the privacy policy.",
       "submit": "Submit for approval",
       "submitting": "Submitting…",
@@ -407,6 +418,32 @@
     "passwordReset": {
       "subject": "Reset your password",
       "body": "Hi {displayName},\n\nWe received a request to reset your password. This link is valid for 1 hour.\n\nReset your password here: {resetUrl}\n\nIf you didn't request this, you can safely ignore this email.\n\n— Precisa-se, Casa da Cidade"
+    }
+  },
+  "admin": {
+    "settings": {
+      "title": "Platform Settings",
+      "subtitle": "Enable or disable platform features.",
+      "categories": "Categories",
+      "categoryEnabled": "Enabled",
+      "categoryDisabled": "Disabled",
+      "saved": "Settings saved.",
+      "errorAtLeastOne": "At least one category must remain active.",
+      "errorForbidden": "You don't have permission to change this setting.",
+      "settings": "Settings",
+      "branding": "Branding",
+      "siteName": "Site name",
+      "siteNamePlaceholder": "e.g. Casa da Cidade",
+      "primaryColor": "Primary color",
+      "accentColor": "Accent color",
+      "logo": "Logo",
+      "favicon": "Favicon",
+      "uploadLogo": "Upload logo",
+      "uploadFavicon": "Upload favicon",
+      "preview": "Preview",
+      "brandingSaved": "Branding updated.",
+      "errorInvalidColor": "Color must be a valid hex code (e.g., #2F6B4F).",
+      "colorPreview": "Color preview"
     }
   }
 }

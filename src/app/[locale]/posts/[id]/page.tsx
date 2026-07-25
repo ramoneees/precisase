@@ -94,6 +94,7 @@ export default async function PostDetailPage({
   const t = await getTranslations({ locale, namespace: "post.detail" });
   const tCategory = await getTranslations({ locale, namespace: "category" });
   const tAnon = await getTranslations({ locale, namespace: "post.anon" });
+  const tJobFields = await getTranslations({ locale, namespace: "post.createForm" });
 
   const uploadedPhotos = getPostPhotos(post.extraAttributes).map(resolvePhotoUrl);
   const authorName = author?.displayName ?? "";
@@ -140,6 +141,49 @@ export default async function PostDetailPage({
       <div className="rounded-2xl border border-[#E3DED2] bg-white p-5">
         <p className="text-sm whitespace-pre-line text-[#232922]">{post.description}</p>
       </div>
+
+      {category?.slug === "jobs" ? (() => {
+        const attrs = post.extraAttributes as Record<string, unknown>;
+        const jobItems: { label: string; value: string }[] = [];
+
+        const typeKeyMap: Record<string, string> = {
+          full_time: "employmentTypeFullTime",
+          part_time: "employmentTypePartTime",
+          contract: "employmentTypeContract",
+          internship: "employmentTypeInternship",
+        };
+
+        if (typeof attrs.employmentType === "string" && attrs.employmentType) {
+          const key = typeKeyMap[attrs.employmentType];
+          jobItems.push({
+            label: tJobFields("employmentType"),
+            value: key ? tJobFields(key) : attrs.employmentType,
+          });
+        }
+        if (typeof attrs.salaryRange === "string" && attrs.salaryRange) {
+          jobItems.push({ label: tJobFields("salaryRange"), value: attrs.salaryRange });
+        }
+        if (typeof attrs.location === "string" && attrs.location) {
+          jobItems.push({ label: tJobFields("jobLocation"), value: attrs.location });
+        }
+
+        if (jobItems.length === 0) return null;
+
+        return (
+          <div className="rounded-2xl border border-[#E3DED2] bg-white p-5">
+            <dl className="flex flex-col gap-3">
+              {jobItems.map((item) => (
+                <div key={item.label} className="flex items-baseline gap-2">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-[#6B7268]">
+                    {item.label}
+                  </dt>
+                  <dd className="text-sm text-[#232922]">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        );
+      })() : null}
 
       {isAuthor ? null : existingInterest ? (
         <ContactPanel

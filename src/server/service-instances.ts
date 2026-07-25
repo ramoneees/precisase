@@ -22,6 +22,11 @@ import { PasswordResetService } from "@/server/services/password-reset-service";
 import { PrismaPasswordResetRepository } from "@/server/repositories/prisma-password-reset-repository";
 import { MfaService } from "@/server/services/mfa-service";
 import { PrismaMfaRepository } from "@/server/repositories/prisma-mfa-repository";
+import { FeatureFlagService } from "@/server/services/feature-flag-service";
+import { PrismaFeatureFlagRepository } from "@/server/repositories/prisma-feature-flag-repository";
+import { BrandingService } from "@/server/services/branding-service";
+import { PrismaBrandingRepository } from "@/server/repositories/prisma-branding-repository";
+import { prisma } from "@/server/repositories/prisma-client";
 
 export const postService = new PostService(new PrismaPostRepository());
 export const interestService = new InterestService(new PrismaInterestRepository());
@@ -39,3 +44,8 @@ export const passwordResetService = new PasswordResetService(
 );
 
 export const mfaService = new MfaService(new PrismaMfaRepository(), passwordService);
+
+const featureFlagRepo = new PrismaFeatureFlagRepository();
+export const featureFlagService = new FeatureFlagService(featureFlagRepo);
+
+export const brandingService = new BrandingService(new PrismaBrandingRepository(prisma));

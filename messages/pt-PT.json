@@ -5,6 +5,7 @@
     "publish": "Publicar",
     "myPosts": "As minhas publicações",
     "moderation": "Moderação",
+    "settings": "Definições",
     "signIn": "Entrar",
     "signOut": "Sair",
     "myAccount": "A minha conta",
@@ -35,7 +36,8 @@
   },
   "category": {
     "volunteering": "Voluntariado",
-    "donation": "Doação"
+    "donation": "Doação",
+    "jobs": "Emprego"
   },
   "post": {
     "type": {
@@ -96,6 +98,15 @@
       "contactMethodLabel": "Contacto preferido",
       "contactValueLabel": "Contacto",
       "contactValuePlaceholder": "912 345 678",
+      "employmentType": "Tipo de emprego",
+      "employmentTypeFullTime": "Tempo inteiro",
+      "employmentTypePartTime": "Tempo parcial",
+      "employmentTypeContract": "Contrato",
+      "employmentTypeInternship": "Estágio",
+      "salaryRange": "Faixa salarial (opcional)",
+      "salaryRangePlaceholder": "ex: 800€–1200€/mês",
+      "jobLocation": "Localização (opcional)",
+      "jobLocationPlaceholder": "ex: Lisboa, remoto",
       "consentLabel": "Autorizo a Casa da Cidade a guardar e a partilhar o meu contacto com pessoas interessadas neste post, de acordo com a política de privacidade.",
       "submit": "Enviar para aprovação",
       "submitting": "A enviar…",
@@ -407,6 +418,32 @@
     "passwordReset": {
       "subject": "Repor a tua palavra-passe",
       "body": "Olá {displayName},\n\nRecebemos um pedido para repor a tua palavra-passe. Este link é válido durante 1 hora.\n\nRepõe a tua palavra-passe aqui: {resetUrl}\n\nSe não pediste isto, podes ignorar este email.\n\n— Precisa-se, Casa da Cidade"
+    }
+  },
+  "admin": {
+    "settings": {
+      "title": "Definições da Plataforma",
+      "subtitle": "Ativar ou desativar funcionalidades da plataforma.",
+      "categories": "Categorias",
+      "categoryEnabled": "Ativada",
+      "categoryDisabled": "Desativada",
+      "saved": "Definições guardadas.",
+      "errorAtLeastOne": "Pelo menos uma categoria tem de permanecer ativa.",
+      "errorForbidden": "Não tens permissão para alterar esta definição.",
+      "settings": "Definições",
+      "branding": "Marca",
+      "siteName": "Nome do site",
+      "siteNamePlaceholder": "ex: Casa da Cidade",
+      "primaryColor": "Cor principal",
+      "accentColor": "Cor de destaque",
+      "logo": "Logótipo",
+      "favicon": "Favicon",
+      "uploadLogo": "Carregar logótipo",
+      "uploadFavicon": "Carregar favicon",
+      "preview": "Pré-visualização",
+      "brandingSaved": "Marca atualizada.",
+      "errorInvalidColor": "A cor tem de ser um código hexadecimal válido (ex: #2F6B4F).",
+      "colorPreview": "Pré-visualização da cor"
     }
   }
 }

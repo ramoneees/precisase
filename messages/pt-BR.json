@@ -5,6 +5,7 @@
     "publish": "Publicar",
     "myPosts": "Minhas publicações",
     "moderation": "Moderação",
+    "settings": "Configurações",
     "signIn": "Entrar",
     "signOut": "Sair",
     "myAccount": "Minha conta",
@@ -35,7 +36,8 @@
   },
   "category": {
     "volunteering": "Voluntariado",
-    "donation": "Doação"
+    "donation": "Doação",
+    "jobs": "Emprego"
   },
   "post": {
     "type": {
@@ -96,6 +98,15 @@
       "contactMethodLabel": "Contato preferido",
       "contactValueLabel": "Contato",
       "contactValuePlaceholder": "912 345 678",
+      "employmentType": "Tipo de emprego",
+      "employmentTypeFullTime": "Tempo integral",
+      "employmentTypePartTime": "Tempo parcial",
+      "employmentTypeContract": "Contrato",
+      "employmentTypeInternship": "Estágio",
+      "salaryRange": "Faixa salarial (opcional)",
+      "salaryRangePlaceholder": "ex: R$2000–R$3000/mês",
+      "jobLocation": "Localização (opcional)",
+      "jobLocationPlaceholder": "ex: São Paulo, remoto",
       "consentLabel": "Autorizo a Casa da Cidade a guardar e compartilhar meu contato com pessoas interessadas neste post, de acordo com a política de privacidade.",
       "submit": "Enviar para aprovação",
       "submitting": "Enviando…",
@@ -407,6 +418,32 @@
     "passwordReset": {
       "subject": "Redefinir sua senha",
       "body": "Olá {displayName},\n\nRecebemos um pedido para redefinir sua senha. Este link é válido por 1 hora.\n\nRedefina sua senha aqui: {resetUrl}\n\nSe você não solicitou isso, pode ignorar este e-mail.\n\n— Precisa-se, Casa da Cidade"
+    }
+  },
+  "admin": {
+    "settings": {
+      "title": "Configurações da Plataforma",
+      "subtitle": "Ativar ou desativar funcionalidades da plataforma.",
+      "categories": "Categorias",
+      "categoryEnabled": "Ativada",
+      "categoryDisabled": "Desativada",
+      "saved": "Configurações salvas.",
+      "errorAtLeastOne": "Pelo menos uma categoria deve permanecer ativa.",
+      "errorForbidden": "Você não tem permissão para alterar esta configuração.",
+      "settings": "Configurações",
+      "branding": "Marca",
+      "siteName": "Nome do site",
+      "siteNamePlaceholder": "ex: Casa da Cidade",
+      "primaryColor": "Cor principal",
+      "accentColor": "Cor de destaque",
+      "logo": "Logo",
+      "favicon": "Favicon",
+      "uploadLogo": "Carregar logo",
+      "uploadFavicon": "Carregar favicon",
+      "preview": "Visualização",
+      "brandingSaved": "Marca atualizada.",
+      "errorInvalidColor": "A cor deve ser um código hexadecimal válido (ex: #2F6B4F).",
+      "colorPreview": "Visualização da cor"
     }
   }
 }

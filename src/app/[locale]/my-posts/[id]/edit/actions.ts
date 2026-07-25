@@ -42,6 +42,7 @@ export interface ResubmitPostInput {
   contactMethod: ContactMethodValue;
   contactValue: string;
   phoneCountry?: string;
+  extraAttributes?: Record<string, unknown>;
 }
 
 export async function resubmitPostAction(
@@ -93,6 +94,7 @@ export async function resubmitPostAction(
         description,
         contactMethod: input.contactMethod,
         contactValue: normalizedContact,
+        extraAttributes: input.extraAttributes,
       },
     });
   } catch (error) {

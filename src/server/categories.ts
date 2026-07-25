@@ -14,21 +14,30 @@ export interface CategoryLite {
   id: string;
   slug: string;
   key: string;
+  isActive: boolean;
 }
 
 export const listCategories = cache(async (): Promise<CategoryLite[]> => {
   return prisma.category.findMany({
-    select: { id: true, slug: true, key: true },
+    where: { isActive: true },
+    select: { id: true, slug: true, key: true, isActive: true },
+    orderBy: { slug: "asc" },
+  });
+});
+
+export const listAllCategories = cache(async (): Promise<CategoryLite[]> => {
+  return prisma.category.findMany({
+    select: { id: true, slug: true, key: true, isActive: true },
     orderBy: { slug: "asc" },
   });
 });
 
 export async function findCategoryBySlug(slug: string): Promise<CategoryLite | null> {
-  const categories = await listCategories();
+  const categories = await listAllCategories();
   return categories.find((category) => category.slug === slug) ?? null;
 }
 
 export async function findCategoryById(id: string): Promise<CategoryLite | null> {
-  const categories = await listCategories();
+  const categories = await listAllCategories();
   return categories.find((category) => category.id === id) ?? null;
 }

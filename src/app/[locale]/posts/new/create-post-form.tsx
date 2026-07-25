@@ -64,6 +64,11 @@ export function CreatePostForm({
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<CreatePostErrorCode | null>(null);
 
+  // Job-specific fields (only relevant when categorySlug === "jobs")
+  const [employmentType, setEmploymentType] = useState("");
+  const [salaryRange, setSalaryRange] = useState("");
+  const [jobLocation, setJobLocation] = useState("");
+
   const canSubmit =
     title.trim().length > 0 &&
     description.trim().length > 0 &&
@@ -125,6 +130,15 @@ export function CreatePostForm({
     }
 
     startTransition(async () => {
+      // Build extraAttributes: photos + job-specific fields
+      const extraAttributes: Record<string, unknown> = {};
+      if (photos.length > 0) extraAttributes.photos = photos;
+      if (categorySlug === "jobs") {
+        if (employmentType) extraAttributes.employmentType = employmentType;
+        if (salaryRange.trim()) extraAttributes.salaryRange = salaryRange.trim();
+        if (jobLocation.trim()) extraAttributes.location = jobLocation.trim();
+      }
+
       const result = await createPostAction({
         type,
         categorySlug,
@@ -134,6 +148,7 @@ export function CreatePostForm({
         contactValue,
         consent,
         photos,
+        extraAttributes,
       });
 
       if (!result.ok) {
@@ -192,7 +207,15 @@ export function CreatePostForm({
                 key={category.id}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => setCategorySlug(category.slug)}
+                onClick={() => {
+                  setCategorySlug(category.slug);
+                  // Reset job-specific fields when switching away from jobs
+                  if (category.slug !== "jobs") {
+                    setEmploymentType("");
+                    setSalaryRange("");
+                    setJobLocation("");
+                  }
+                }}
                 className="rounded-xl border px-4 py-3 text-sm font-medium transition"
                 style={
                   selected
@@ -214,6 +237,54 @@ export function CreatePostForm({
           })}
         </div>
       </div>
+
+      {categorySlug === "jobs" ? (
+        <div className="flex flex-col gap-4 rounded-xl border border-[#E3DED2] bg-white p-4">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="post-employment-type" className="text-sm font-medium text-[#232922]">
+              {t("employmentType")}
+            </label>
+            <select
+              id="post-employment-type"
+              value={employmentType}
+              onChange={(e) => setEmploymentType(e.target.value)}
+              className="rounded-xl border border-[#E3DED2] bg-white px-4 py-2.5 text-sm text-[#232922] focus:border-[#2F6B4F] focus:outline-none"
+            >
+              <option value="">—</option>
+              <option value="full_time">{t("employmentTypeFullTime")}</option>
+              <option value="part_time">{t("employmentTypePartTime")}</option>
+              <option value="contract">{t("employmentTypeContract")}</option>
+              <option value="internship">{t("employmentTypeInternship")}</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="post-salary-range" className="text-sm font-medium text-[#232922]">
+              {t("salaryRange")}
+            </label>
+            <input
+              id="post-salary-range"
+              type="text"
+              value={salaryRange}
+              onChange={(e) => setSalaryRange(e.target.value)}
+              placeholder={t("salaryRangePlaceholder")}
+              className="rounded-xl border border-[#E3DED2] bg-white px-4 py-2.5 text-sm text-[#232922] placeholder:text-[#9AA098] focus:border-[#2F6B4F] focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="post-job-location" className="text-sm font-medium text-[#232922]">
+              {t("jobLocation")}
+            </label>
+            <input
+              id="post-job-location"
+              type="text"
+              value={jobLocation}
+              onChange={(e) => setJobLocation(e.target.value)}
+              placeholder={t("jobLocationPlaceholder")}
+              className="rounded-xl border border-[#E3DED2] bg-white px-4 py-2.5 text-sm text-[#232922] placeholder:text-[#9AA098] focus:border-[#2F6B4F] focus:outline-none"
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-2">
         <label htmlFor="post-photos" className="text-sm font-medium text-[#232922]">

@@ -6,6 +6,8 @@ import { Nunito, Inter } from "next/font/google";
 import { routing, type AppLocale } from "@/i18n/routing";
 import { AppHeader } from "@/components/layout/app-header";
 import { ToastProvider } from "@/components/ui/toast-provider";
+import { brandingService } from "@/server/service-instances";
+import { lighten } from "@/lib/color-utils";
 import "../globals.css";
 
 // Design spec: headings in Nunito 800, body in Inter 400/500/600/700
@@ -57,6 +59,8 @@ export default async function LocaleLayout({
   // Enables static rendering for this locale (next-intl RSC pattern).
   setRequestLocale(locale);
 
+  const branding = await brandingService.getConfig();
+
   return (
     <html
       lang={locale}
@@ -68,6 +72,20 @@ export default async function LocaleLayout({
       // element so real mismatches elsewhere in the tree still surface.
       suppressHydrationWarning
     >
+      <head>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              :root {
+                --color-primary: ${branding.primaryColor};
+                --color-accent: ${branding.accentColor};
+                --color-primary-tint: ${lighten(branding.primaryColor, 0.9)};
+                --color-accent-tint: ${lighten(branding.accentColor, 0.9)};
+              }
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-[#F7F4EE] text-[#232922]">
         <NextIntlClientProvider>
           <ToastProvider>

@@ -169,7 +169,7 @@ model User {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
-  posts               Post[]                @relation("PostAuthor")
+  posts               Post[]               @relation("PostAuthor")
   interests           Interest[]
   moderationActions   ModerationAction[]
   consentRecords      ConsentRecord[]
@@ -198,9 +198,10 @@ model PasswordResetToken {
 }
 
 model Category {
-  id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  slug String @unique
-  key  String
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug     String  @unique
+  key      String
+  isActive Boolean @default(true) @map("is_active")
 
   posts Post[]
 
@@ -364,4 +365,13 @@ model ApiKey {
   auditLogs AuditLog[]
 
   @@map("api_keys")
+}
+
+model SiteConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@map("site_configs")
 }
