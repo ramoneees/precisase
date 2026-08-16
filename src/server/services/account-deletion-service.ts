@@ -33,6 +33,14 @@
  *   - Interest: deleted (the user's own expressions of interest carry no
  *     value once the account is gone, and the DB's `Interest.userId` FK
  *     would otherwise still point at an identifiable-by-inference row).
+ *   - Message: the user's sent messages are hard-deleted (the only path
+ *     that ever hard-deletes a Message — see the model comment in
+ *     prisma/schema.prisma). The other participant's messages survive.
+ *   - Conversation: conversations created from the user's own interests
+ *     are deleted (their `interest_id` FK is ON DELETE RESTRICT, so they
+ *     cannot outlive the Interest deletion); every other conversation
+ *     the user participates in is archived (D1 — content retained for
+ *     potential authority requests, new sends rejected).
  *   - Post: **not** modified by this service. The PII risk on Post rows was
  *     already limited to the encrypted `contactValue` (§7.4) and the
  *     `authorId` FK, which now points at an anonymized User row — there is
@@ -78,8 +86,10 @@ export interface AccountDeletionRepository {
   findUserById(userId: string): Promise<AccountDeletionUserRecord | null>;
   /**
    * Performs the full redaction (User fields, ConsentRecord withdrawal,
-   * Interest deletion, AuditLog row) as a single atomic operation. The
-   * Prisma-backed implementation wraps this in `$transaction`.
+   * Interest deletion, chat data handling — sent messages deleted,
+   * participated conversations archived — and the AuditLog row) as a
+   * single atomic operation. The Prisma-backed implementation wraps this
+   * in `$transaction`.
    */
   redactAndDeleteAccount(userId: string, redaction: AccountRedaction): Promise<void>;
 }
