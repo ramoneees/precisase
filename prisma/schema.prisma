@@ -86,12 +86,15 @@ enum ConsentScope {
 }
 
 /// Notification.type — the event that generated the notification (§6.1–6.3).
+/// `chat_message_received` — internal chat (2026-08-16): queued for the
+/// recipient on the FIRST unread message only (D2 anti-spam).
 enum NotificationType {
   interest_received
   post_approved
   post_rejected
   post_closed
   password_reset
+  chat_message_received
 
   @@map("notification_type")
 }
