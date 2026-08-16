@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { Link } from "@/i18n/navigation";
 import { PhoneService } from "@/server/services/phone-service";
 import { formatPhoneForDisplay } from "@/server/services/phone-service";
 import type { ContactMethodValue } from "@/server/services/post-service";
@@ -28,10 +29,14 @@ export async function ContactPanel({
   locale,
   contactMethod,
   contactValue,
+  conversationId,
 }: {
   locale: string;
   contactMethod: ContactMethodValue;
   contactValue: string;
+  /** Null until a conversation exists for the viewer's interest — the
+   * chat link only renders when present. */
+  conversationId?: string | null;
 }) {
   const t = await getTranslations({ locale, namespace: "post.detail" });
   const showWhatsAppLink = isPhoneLike(contactValue, contactMethod);
@@ -47,16 +52,26 @@ export async function ContactPanel({
       <p className="text-sm text-[#232922]">
         {t(`contactMethodLabel.${contactMethod}`)}: <strong>{displayValue}</strong>
       </p>
-      {showWhatsAppLink ? (
-        <a
-          href={waMeHref(contactValue)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-fit rounded-full bg-[#2F6B4F] px-6 py-3 text-sm font-medium text-white hover:opacity-90"
-        >
-          {t("continueOnWhatsApp")}
-        </a>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-3">
+        {conversationId ? (
+          <Link
+            href={`/messages/${conversationId}`}
+            className="w-fit rounded-full bg-[#2F6B4F] px-6 py-3 text-sm font-medium text-white hover:opacity-90"
+          >
+            {t("chatOnPlatform")}
+          </Link>
+        ) : null}
+        {showWhatsAppLink ? (
+          <a
+            href={waMeHref(contactValue)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-fit rounded-full border border-[#2F6B4F] px-6 py-3 text-sm font-medium text-[#2F6B4F] hover:opacity-90"
+          >
+            {t("continueOnWhatsApp")}
+          </a>
+        ) : null}
+      </div>
     </div>
   );
 }
