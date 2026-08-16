@@ -17,6 +17,9 @@ import { InterestService } from "@/server/services/interest-service";
 import { PrismaInterestRepository } from "@/server/repositories/prisma-interest-repository";
 import { ConversationService } from "@/server/services/conversation-service";
 import { PrismaConversationRepository } from "@/server/repositories/prisma-conversation-repository";
+import { MessageService } from "@/server/services/message-service";
+import { PrismaMessageRepository } from "@/server/repositories/prisma-message-repository";
+import { PrismaMessageNotificationPort } from "@/server/repositories/prisma-message-notification-port";
 import { AccountDeletionService } from "@/server/services/account-deletion-service";
 import { PrismaAccountDeletionRepository } from "@/server/repositories/prisma-account-deletion-repository";
 import { PasswordService } from "@/server/services/password-service";
@@ -33,6 +36,11 @@ import { prisma } from "@/server/repositories/prisma-client";
 export const postService = new PostService(new PrismaPostRepository());
 export const interestService = new InterestService(new PrismaInterestRepository());
 export const conversationService = new ConversationService(new PrismaConversationRepository());
+export const messageService = new MessageService(
+  new PrismaMessageRepository(),
+  new PrismaConversationRepository(), // ConversationLookupPort — same store, narrower view
+  new PrismaMessageNotificationPort(),
+);
 
 const passwordService = new PasswordService();
 export const accountDeletionService = new AccountDeletionService(
