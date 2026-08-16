@@ -10,7 +10,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { postService } from "@/server/service-instances";
+import { conversationService, postService } from "@/server/service-instances";
 import {
   InvalidPostTransitionError,
   PostNotFoundError,
@@ -47,6 +47,10 @@ export async function closeMyPostAction(
       postId,
       actor: { id: session.user.id, role: session.user.role },
     });
+    // D4: a closed post archives its conversations (content retained for
+    // potential authority requests) — sends are then rejected by
+    // MessageService while history stays readable for both participants.
+    await conversationService.archiveForPost(postId);
   } catch (error) {
     return { ok: false, error: mapError(error) };
   }

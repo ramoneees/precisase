@@ -5,7 +5,6 @@ import {
   type MessageNotificationPort,
   type ConversationLookupPort,
   type MessageRecord,
-  type MessageSummary,
   type ConversationRecord,
   EmptyMessageError,
   MessageTooLongError,
@@ -143,7 +142,7 @@ describe("MessageService", () => {
   });
 
   it("does not queue notification when recipient already has unread", async () => {
-    const { service, repo, notif } = await setup();
+    const { service, notif } = await setup();
 
     // First message (unread)
     await service.sendMessage({
