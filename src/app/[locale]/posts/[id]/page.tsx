@@ -52,7 +52,17 @@ async function loadPostUncached(params: PageParams) {
 
   const isAuthor = viewer?.id === post.authorId;
 
-  return { post, author, category, viewer, isAuthor, existingInterest, locale };
+  // Read-only projection: the conversation spawned by the viewer's
+  // interest, powering the "Chat on platform" option in the contact
+  // panel. Null until a conversation exists for this interest.
+  const conversation = existingInterest
+    ? await prisma.conversation.findUnique({
+        where: { interestId: existingInterest.id },
+        select: { id: true },
+      })
+    : null;
+
+  return { post, author, category, viewer, isAuthor, existingInterest, conversationId: conversation?.id ?? null, locale };
 }
 
 /**
@@ -88,7 +98,7 @@ export default async function PostDetailPage({
   const { locale } = resolved;
   setRequestLocale(locale);
 
-  const { post, author, category, viewer, isAuthor, existingInterest } =
+  const { post, author, category, viewer, isAuthor, existingInterest, conversationId } =
     await loadPost(resolved);
 
   const t = await getTranslations({ locale, namespace: "post.detail" });
@@ -190,6 +200,7 @@ export default async function PostDetailPage({
           locale={locale}
           contactMethod={post.contactMethod}
           contactValue={post.contactValue}
+          conversationId={conversationId}
         />
       ) : post.status === "active" && viewer ? (
         <ExpressInterestButton postId={post.id} locale={locale} />
