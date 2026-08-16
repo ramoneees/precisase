@@ -6,6 +6,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { brandingService, conversationService, postService } from "@/server/service-instances";
 import { LanguageSwitcher } from "./language-switcher";
 import { signOutAction } from "./sign-out-action";
+import { MobileNav } from "./mobile-nav";
 
 /**
  * Shared sticky header, used from the root `[locale]/layout.tsx` so every
@@ -107,11 +108,11 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
               href="/profile"
               aria-label={t("myAccount")}
               title={displayName ?? t("myAccount")}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F0EA] text-sm font-semibold text-[#2F6B4F] hover:opacity-80"
+              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F0EA] text-sm font-semibold text-[#2F6B4F] hover:opacity-80 sm:flex"
             >
               {getInitials(displayName)}
             </Link>
-            <form action={signOutAction.bind(null, locale)}>
+            <form action={signOutAction.bind(null, locale)} className="hidden sm:block">
               <button
                 type="submit"
                 className="shrink-0 rounded-full border border-[#E3DED2] px-3 py-1.5 text-sm font-medium text-[#232922] hover:bg-[#F5F2EA]"
@@ -123,11 +124,35 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
         ) : (
           <Link
             href="/signin"
-            className="shrink-0 rounded-full bg-[#2F6B4F] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="hidden shrink-0 rounded-full bg-[#2F6B4F] px-4 py-2 text-sm font-medium text-white hover:opacity-90 sm:block"
           >
             {t("signIn")}
           </Link>
         )}
+
+        {/* Mobile hamburger menu (below sm) */}
+        <MobileNav
+          links={[
+            { href: "/", label: t("home") },
+            { href: "/posts/new", label: t("publish") },
+            { href: "/my-posts", label: t("myPosts") },
+            ...(session?.user
+              ? [{ href: "/messages" as const, label: tChat("messages"), badge: unreadCount as number }]
+              : []),
+            ...(isModerator
+              ? [
+                  { href: "/moderation" as const, label: t("moderation"), badge: pendingCount as number },
+                  { href: "/admin/settings" as const, label: t("settings") },
+                ]
+              : []),
+          ]}
+          signOutLabel={t("signOut")}
+          signOutAction={signOutAction}
+          locale={locale}
+          myAccountLabel={t("myAccount")}
+          myAccountHref="/profile"
+          displayName={displayName}
+        />
       </nav>
     </header>
   );

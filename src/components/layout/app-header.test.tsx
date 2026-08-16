@@ -77,6 +77,7 @@ vi.mock("@/i18n/navigation", async () => {
 
 vi.mock("./language-switcher", () => ({ LanguageSwitcher: () => null }));
 vi.mock("./sign-out-action", () => ({ signOutAction: vi.fn() }));
+vi.mock("./mobile-nav", () => ({ MobileNav: () => null }));
 
 import { conversationService, postService } from "@/server/service-instances";
 
