@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
-import { brandingService } from "@/server/service-instances";
+import { brandingService, conversationService, postService } from "@/server/service-instances";
 import { LanguageSwitcher } from "./language-switcher";
 import { signOutAction } from "./sign-out-action";
 
@@ -18,14 +18,29 @@ import { signOutAction } from "./sign-out-action";
  * the UI half of the check — `moderation/page.tsx` re-verifies
  * `session.user.role` server-side regardless of whether this link was
  * rendered, since a hidden link is not an access control.
+ *
+ * Notification badges (chat plan Task 11, decision D2): signed-in users
+ * get an unread-chat badge on "Messages" (`conversationService.countUnread`)
+ * and moderators/admins additionally get a pending-queue badge on
+ * "Moderação" (`postService.listPendingPosts().length` — the moderation
+ * page already loads the same list; at MVP scale a count endpoint isn't
+ * worth a new port method). The layout is force-dynamic, so these counts
+ * are re-read per request.
  */
 export async function AppHeader({ locale }: { locale: AppLocale }) {
   const t = await getTranslations({ locale, namespace: "nav" });
+  const tChat = await getTranslations({ locale, namespace: "chat.nav" });
+  const tModeration = await getTranslations({ locale, namespace: "moderation" });
   const session = await auth();
   const role = session?.user?.role;
   const isModerator = role === "moderator" || role === "admin";
   const displayName = session?.user?.name ?? null;
   const branding = await brandingService.getConfig();
+
+  const [unreadCount, pendingCount] = await Promise.all([
+    session?.user ? conversationService.countUnread(session.user.id) : Promise.resolve(0),
+    isModerator ? postService.listPendingPosts().then((posts) => posts.length) : Promise.resolve(0),
+  ]);
 
   // The MFA warn banner is driven by the `x-mfa-warn` header set in
   // `proxy.ts` (T18) during the warn-only enforcement window.
@@ -65,9 +80,16 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
           <Link href="/my-posts" className="hover:text-[#2F6B4F]">
             {t("myPosts")}
           </Link>
+          {session?.user ? (
+            <Link href="/messages" className="hover:text-[#2F6B4F]">
+              {tChat("messages")}
+              {unreadCount > 0 ? <UnreadBadge label={tChat("badge", { count: unreadCount })} count={unreadCount} /> : null}
+            </Link>
+          ) : null}
           {isModerator ? (
             <Link href="/moderation" className="hover:text-[#2F6B4F]">
               {t("moderation")}
+              {pendingCount > 0 ? <UnreadBadge label={tModeration("countSubtitle", { count: pendingCount })} count={pendingCount} /> : null}
             </Link>
           ) : null}
           {isModerator ? (
@@ -108,6 +130,24 @@ export async function AppHeader({ locale }: { locale: AppLocale }) {
         )}
       </nav>
     </header>
+  );
+}
+
+/**
+ * Small numeric pill used for both the unread-chat badge ("Messages") and
+ * the pending-moderation badge ("Moderação"). The `label` becomes the
+ * tooltip so sighted users get the pluralized phrasing the badge itself
+ * can't convey with a bare number; screen readers read the count as part
+ * of the link's accessible name ("Messages 3").
+ */
+function UnreadBadge({ label, count }: { label: string; count: number }) {
+  return (
+    <span
+      title={label}
+      className="ml-1.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#C4622D] px-1.5 text-[11px] font-bold leading-none text-white"
+    >
+      {count}
+    </span>
   );
 }
 
