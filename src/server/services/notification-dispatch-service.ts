@@ -40,7 +40,8 @@ export type NotificationTypeValue =
   | "post_approved"
   | "post_rejected"
   | "post_closed"
-  | "password_reset";
+  | "password_reset"
+  | "chat_message_received";
 
 export type NotificationChannelValue = "email" | "in_app";
 

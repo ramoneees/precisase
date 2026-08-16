@@ -170,6 +170,13 @@ export async function buildNotificationEmail(
         text: interpolate(t.body, { displayName, resetUrl }),
       };
     }
+    case "chat_message_received": {
+      // Chat notifications are queued `in_app` only (D2) — the worker's
+      // listQueued filters `channel = 'email'`, so this branch is
+      // unreachable in practice. Kept explicit so the exhaustiveness
+      // guard below still catches genuinely untemplated types.
+      throw new Error("chat_message_received notifications are in_app only and never emailed.");
+    }
     default: {
       // Exhaustiveness guard — if a new NotificationType is ever added to
       // the Prisma schema without a matching template here, fail loudly
