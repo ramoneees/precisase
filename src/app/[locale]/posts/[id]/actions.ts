@@ -10,11 +10,23 @@
  * `expressInterest` is idempotent (C7): a duplicate (post_id, user_id)
  * pair returns the existing record without throwing, so concurrent or
  * sequential re-submits resolve to `{ ok: true }` here.
+ *
+ * Chat plan Task 12: after the interest is recorded, a 1:1 Conversation
+ * with the post author is get-or-created (also idempotent). Wired here at
+ * the action level rather than inside InterestService so the interest flow
+ * stays untouched (plan decision, YAGNI). If conversation creation fails
+ * after the interest row was written, the action reports the error and a
+ * retry converges: no duplicate interest notification (C7), no duplicate
+ * conversation (unique `interest_id`).
  */
 
 import { revalidatePath } from "next/cache";
 import { getAuthContext } from "@/server/auth/auth-context";
-import { interestService } from "@/server/service-instances";
+import {
+  conversationService,
+  interestService,
+  postService,
+} from "@/server/service-instances";
 import {
   PostNotAvailableError,
   PostNotFoundError,
@@ -44,7 +56,21 @@ export async function expressInterestAction(
   }
 
   try {
-    await interestService.expressInterest({ postId, userId: authContext.user.id });
+    const interest = await interestService.expressInterest({
+      postId,
+      userId: authContext.user.id,
+    });
+
+    // `expressInterest` above already validated the post is `active`,
+    // which is exactly the visibility `getPost` grants to viewer `null`.
+    const post = await postService.getPost({ postId, viewer: null });
+
+    await conversationService.getOrCreateForInterest({
+      interestId: interest.id,
+      postId,
+      authorId: post.authorId,
+      interestedUserId: authContext.user.id,
+    });
   } catch (error) {
     if (error instanceof PostNotAvailableError || error instanceof PostNotFoundError) {
       return { ok: false, error: "unavailable" };
