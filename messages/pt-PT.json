@@ -397,6 +397,34 @@
       }
     }
   },
+  "chat": {
+    "nav": {
+      "messages": "Mensagens",
+      "badge": "{count, plural, one {# não lida} other {# não lidas}}"
+    },
+    "inbox": {
+      "title": "Mensagens",
+      "subtitle": "Conversas com outros membros da comunidade.",
+      "empty": "Ainda não tens conversas. Manifesta interesse num post para começar.",
+      "archived": "Arquivada",
+      "unread": "{count, plural, one {# não lida} other {# não lidas}}"
+    },
+    "conversation": {
+      "backLink": "← Voltar às mensagens",
+      "archivedBanner": "Esta conversa foi arquivada — o post foi resolvido.",
+      "inputPlaceholder": "Escreve uma mensagem…",
+      "send": "Enviar",
+      "sending": "A enviar…",
+      "loadMore": "Ver mensagens anteriores",
+      "empty": "Sem mensagens. Inicia a conversa!",
+      "errors": {
+        "empty": "A mensagem não pode estar vazia.",
+        "tooLong": "A mensagem é demasiado longa (máximo 4000 caracteres).",
+        "archived": "Esta conversa foi arquivada.",
+        "generic": "Não foi possível enviar a mensagem. Tenta novamente."
+      }
+    }
+  },
   "email": {
     "postApproved": {
       "subject": "O teu post \"{title}\" foi aprovado",

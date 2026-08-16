@@ -397,6 +397,34 @@
       }
     }
   },
+  "chat": {
+    "nav": {
+      "messages": "Messages",
+      "badge": "{count, plural, one {# unread} other {# unread}}"
+    },
+    "inbox": {
+      "title": "Messages",
+      "subtitle": "Conversations with other community members.",
+      "empty": "No conversations yet. Express interest in a post to start.",
+      "archived": "Archived",
+      "unread": "{count, plural, one {# unread} other {# unread}}"
+    },
+    "conversation": {
+      "backLink": "← Back to messages",
+      "archivedBanner": "This conversation has been archived — the post was resolved.",
+      "inputPlaceholder": "Type a message…",
+      "send": "Send",
+      "sending": "Sending…",
+      "loadMore": "Load earlier messages",
+      "empty": "No messages yet. Start the conversation!",
+      "errors": {
+        "empty": "Message cannot be empty.",
+        "tooLong": "Message is too long (max 4000 characters).",
+        "archived": "This conversation has been archived.",
+        "generic": "Could not send the message. Try again."
+      }
+    }
+  },
   "email": {
     "postApproved": {
       "subject": "Your post \"{title}\" was approved",
