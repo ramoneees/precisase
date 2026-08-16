@@ -177,6 +177,9 @@ model User {
   auditLogs           AuditLog[]
   apiKeysCreated      ApiKey[]
   passwordResetTokens PasswordResetToken[]
+  conversationsA      Conversation[]      @relation("ConversationParticipantA")
+  conversationsB      Conversation[]      @relation("ConversationParticipantB")
+  sentMessages        Message[]           @relation("MessageSender")
 
   @@map("users")
 }
@@ -236,6 +239,7 @@ model Post {
   interests         Interest[]
   moderationActions ModerationAction[]
   notifications     Notification[]
+  conversations     Conversation[]
 
   // Shop-window listing filter (§5.1).
   @@index([status, categoryId, type])
@@ -259,6 +263,8 @@ model Interest {
 
   post Post @relation(fields: [postId], references: [id])
   user User @relation(fields: [userId], references: [id])
+
+  conversation Conversation?
 
   // One interest per user per post (§5.1).
   @@unique([postId, userId])
@@ -365,6 +371,55 @@ model ApiKey {
   auditLogs AuditLog[]
 
   @@map("api_keys")
+}
+
+/// 1:1 conversation between a post author and an interested user.
+/// Created automatically when an Interest is expressed (FR09).
+/// Archived (not deleted) when the Post is closed — content retained for
+/// potential authority requests (D1). Moderators can read content only when
+/// the `chat.moderator_read_access` feature flag is ON (D1).
+model Conversation {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  interestId     String    @unique @map("interest_id") @db.Uuid
+  postId         String    @map("post_id") @db.Uuid
+  participantAId String    @map("participant_a_id") @db.Uuid
+  participantBId String    @map("participant_b_id") @db.Uuid
+  archived       Boolean   @default(false)
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz()
+  lastMessageAt  DateTime? @map("last_message_at") @db.Timestamptz()
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  interest       Interest @relation(fields: [interestId], references: [id])
+  post           Post     @relation(fields: [postId], references: [id])
+  participantA   User     @relation("ConversationParticipantA", fields: [participantAId], references: [id])
+  participantB   User     @relation("ConversationParticipantB", fields: [participantBId], references: [id])
+  messages       Message[]
+
+  @@index([postId])
+  @@index([participantAId, updatedAt])
+  @@index([participantBId, updatedAt])
+  @@map("conversations")
+}
+
+/// A chat message within a Conversation. Content is plaintext (max 4000 chars).
+/// Not encrypted at rest in MVP (D4 — encryption deferred). Archived with the
+/// parent Conversation; never hard-deleted unless the user's account is
+/// GDPR-deleted (handled by AccountDeletionService expansion).
+model Message {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  senderId       String    @map("sender_id") @db.Uuid
+  content        String
+  readAt         DateTime? @map("read_at") @db.Timestamptz()
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@map("messages")
 }
 
 model SiteConfig {
