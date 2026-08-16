@@ -50,6 +50,13 @@ export interface ConversationSummary {
  */
 export interface ConversationRepository {
   findByInterestId(interestId: string): Promise<ConversationRecord | null>;
+  /**
+   * Id-only projection of `findByInterestId` — null before a conversation
+   * exists for the interest. Kept separate (not `findByInterestId` + `.id`)
+   * so read paths like the post detail page's "Chat on platform" link can
+   * fetch just the id without hydrating a full record.
+   */
+  findIdByInterestId(interestId: string): Promise<string | null>;
   createConversation(data: {
     interestId: string;
     postId: string;
@@ -125,6 +132,14 @@ export class ConversationService {
    */
   async listForUser(userId: string, limit = 20, cursor?: Date): Promise<ConversationSummary[]> {
     return this.repo.findByParticipant(userId, limit, cursor);
+  }
+
+  /**
+   * Id of the conversation spawned by an interest, or null if none exists
+   * yet. Read path for the post detail page's "Chat on platform" link.
+   */
+  async getConversationIdForInterest(interestId: string): Promise<string | null> {
+    return this.repo.findIdByInterestId(interestId);
   }
 
   /**

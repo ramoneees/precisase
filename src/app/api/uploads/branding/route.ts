@@ -28,7 +28,7 @@ const ALLOWED_MIME_TYPES: Record<string, string> = {
   // If SVG support is needed, implement server-side sanitization with svgo/DOMPurify
 };
 
-const ALLOWED_FIELD_NAMES = ["logo", "favicon"] as const;
+const ALLOWED_FIELD_NAMES: readonly string[] = ["logo", "favicon"];
 
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
@@ -71,7 +71,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // Validate field name against whitelist to prevent path traversal
-  if (!ALLOWED_FIELD_NAMES.includes(fieldName as any)) {
+  if (!ALLOWED_FIELD_NAMES.includes(fieldName)) {
     return NextResponse.json(
       { error: "invalid_field_name" },
       { status: 400 },

@@ -20,6 +20,11 @@ class InMemoryConversationRepository implements ConversationRepository {
     return null;
   }
 
+  async findIdByInterestId(interestId: string) {
+    const existing = await this.findByInterestId(interestId);
+    return existing?.id ?? null;
+  }
+
   async createConversation(data: {
     interestId: string;
     postId: string;
@@ -110,6 +115,22 @@ describe("ConversationService", () => {
     });
 
     expect(second.id).toBe(first.id);
+  });
+
+  it("returns the conversation id for an interest, null before one exists", async () => {
+    const repo = new InMemoryConversationRepository();
+    const service = new ConversationService(repo);
+
+    expect(await service.getConversationIdForInterest("int-1")).toBeNull();
+
+    const conv = await service.getOrCreateForInterest({
+      interestId: "int-1",
+      postId: "post-1",
+      authorId: "author-1",
+      interestedUserId: "user-1",
+    });
+
+    expect(await service.getConversationIdForInterest("int-1")).toBe(conv.id);
   });
 
   it("throws when user is not a participant", async () => {

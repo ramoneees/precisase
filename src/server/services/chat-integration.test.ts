@@ -98,6 +98,11 @@ class InMemoryConversationRepository implements ConversationRepository {
     return null;
   }
 
+  async findIdByInterestId(interestId: string) {
+    const existing = await this.findByInterestId(interestId);
+    return existing?.id ?? null;
+  }
+
   async createConversation(data: {
     interestId: string;
     postId: string;

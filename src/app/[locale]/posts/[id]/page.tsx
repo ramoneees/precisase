@@ -4,7 +4,7 @@ import { cache } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAuthContext } from "@/server/auth/auth-context";
 import { Link } from "@/i18n/navigation";
-import { postService } from "@/server/service-instances";
+import { conversationService, postService } from "@/server/service-instances";
 import { PostNotFoundError } from "@/server/services/post-service";
 import { findCategoryById } from "@/server/categories";
 import { prisma } from "@/server/repositories/prisma-client";
@@ -55,14 +55,11 @@ async function loadPostUncached(params: PageParams) {
   // Read-only projection: the conversation spawned by the viewer's
   // interest, powering the "Chat on platform" option in the contact
   // panel. Null until a conversation exists for this interest.
-  const conversation = existingInterest
-    ? await prisma.conversation.findUnique({
-        where: { interestId: existingInterest.id },
-        select: { id: true },
-      })
+  const conversationId = existingInterest
+    ? await conversationService.getConversationIdForInterest(existingInterest.id)
     : null;
 
-  return { post, author, category, viewer, isAuthor, existingInterest, conversationId: conversation?.id ?? null, locale };
+  return { post, author, category, viewer, isAuthor, existingInterest, conversationId, locale };
 }
 
 /**

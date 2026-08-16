@@ -1,5 +1,6 @@
-import { prisma } from "./prisma-client";
+import type { Prisma } from "@/generated/prisma/client";
 import type { FeatureFlagRepository, CategoryFlag } from "../services/feature-flag-service";
+import { prisma } from "./prisma-client";
 
 export class PrismaFeatureFlagRepository implements FeatureFlagRepository {
   async listAll(): Promise<CategoryFlag[]> {
@@ -27,7 +28,7 @@ export class PrismaFeatureFlagRepository implements FeatureFlagRepository {
 
 // Internal transactional repository that uses the transaction client
 class TransactionalFeatureFlagRepository {
-  constructor(private tx: any) {}
+  constructor(private tx: Prisma.TransactionClient) {}
 
   async listAll(): Promise<CategoryFlag[]> {
     return this.tx.category.findMany({

@@ -58,6 +58,14 @@ export class PrismaConversationRepository implements ConversationRepository {
     return row ? toConversationRecord(row) : null;
   }
 
+  async findIdByInterestId(interestId: string): Promise<string | null> {
+    const row = await prisma.conversation.findUnique({
+      where: { interestId },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+
   async createConversation(data: {
     interestId: string;
     postId: string;

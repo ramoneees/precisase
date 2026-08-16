@@ -23,6 +23,8 @@ function makeProfile(overrides: Partial<ProfileFormData> = {}): ProfileFormData 
     phoneE164: "+351912345678",
     phoneCountry: "PT",
     churchAffiliation: "Casa da Cidade — Núcleo Norte",
+    country: null,
+    timeZone: null,
     role: "user",
     uiLocale: "pt-PT",
     ...overrides,
