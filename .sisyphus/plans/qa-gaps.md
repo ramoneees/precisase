@@ -9,6 +9,11 @@ Rev 2 (2026-10-05): reworked per Momus round-1 review (card `t_9068ca20`, commen
 REQUEST_CHANGES, 3 blocking + 4 minor). All 7 findings addressed; scope unchanged
 (11 tickets, no renumbering); one NEW user gate added (U-7, FR16 remove flow).
 
+Rev 3 (2026-10-05): Ramon DECIDED user gate U-7 (FR16 remove flow IS MVP; remove is a
+SOFT DELETE — see D12). U-7 leaves the HOLD list and becomes ticket **T-G2-5** (Wave 2,
+after T-G2-1 — same files). Ticket count 11 → 12 (4 + 5 + 3); no other ticket renumbered.
+Divergence note 3 and the QA-doc §1.5 correction updated accordingly.
+
 Binding repo law (verified this run, commit `8b5b5b7` on `main`):
 `AGENTS.md` (port pattern, co-located tests, i18n cookie, RBAC layering, audit-log-on-transition),
 `CLAUDE.md` (project context), `docs/MVP.md` (BR01), `prisma/schema.prisma`.
@@ -73,7 +78,7 @@ tests, in-memory port fakes). `package.json` @ 8b5b5b7.
   (`schema.prisma:74`); `src/app/[locale]/moderation/actions.ts` exports only
   `approvePostAction` (:47) and `rejectPostAction` (:76); no `removePost` service method,
   no UI, no Prisma delete anywhere. FR16 ("approve, reject, or remove") is partially
-  unbuilt → U-7.
+  unbuilt → **T-G2-5** (rev 3: Ramon decided — remove is MVP, soft delete).
 
 ### Divergence notes vs docs/QA-REVIEW-DECISIONS.md (must-read for Sisyphus)
 
@@ -83,11 +88,13 @@ tests, in-memory port fakes). `package.json` @ 8b5b5b7.
    doc's "check public detail-route" claim.**
 2. Decisions §17 (notifications in-app only): treated as already-resolved divergence — the
    doc itself says "flag, don't rip out". No ticket.
-3. **Decisions §1.5 ("✅ remove is a hard delete — matches") is FALSE about the code.**
-   The `remove` moderation flow does not exist (see ground truth above): only the enum
+3. **Decisions §1.5 ("✅ remove is a hard delete — matches") is doubly wrong.** The
+   `remove` moderation flow does not exist (see ground truth above): only the enum
    value and the `ModerationActionRecord` type union. T-G1-2 is therefore scoped to
-   approve/reject only; the missing FR16 remove flow is escalated as user gate **U-7** —
-   it is a NEW gap for Ramon, not something a guard ticket invents.
+   approve/reject only. **Rev 3 (2026-10-05): Ramon decided the missing remove flow
+   IS MVP and it is a SOFT DELETE (D12) — decisions §1.5 is SUPERSEDED on both
+   counts: the flow was never built, and when built it hides rather than deletes.**
+   Implemented as ticket **T-G2-5**. Do NOT "align the code to §1.5" — §1.5 loses.
 4. i18n terminology (G-L): Momus's round-1 grep found **zero** occurrences of
    `necessidade`/`petição`/`procura` as type nouns in the pt-PT/pt-BR catalogs, `pedido`/
    `oferta` already consistent, and perfect key parity (340/340/340 identical sets).
@@ -165,6 +172,21 @@ tests, in-memory port fakes). `package.json` @ 8b5b5b7.
   out-of-scope line if inconsistent after the edit. Docs stay English.
 - **D11.** Every PR (ticket) must keep `pnpm test`, `pnpm lint`, `pnpm build` green and keep
   the 3-locale message parity (grep new keys across all 3 files). Conventional commits.
+- **D12 (FR16, decided by Ramon 2026-10-05 — supersedes QA decisions §1.5).** The missing
+  `remove` moderation flow IS MVP. Removal is a **SOFT DELETE**: `Post.deletedAt
+  timestamptz` (nullable) set by a new moderation action `remove`; the post is hidden
+  from ALL listings and public routes, data retained. NOT a hard delete — contrast with
+  author self-delete (a post the author removes themselves), which stays FINAL where it
+  exists (note: no author self-delete flow exists in the code today; the contrast is
+  recorded semantics for any future such flow). Details in T-G2-5: `removePost` (any
+  moderator, non-author — inherits the T-G1-2 conflict-of-interest guard) from BOTH
+  `pending` and `active`; `ModerationAction{type: remove, reason}` + `post.remove`
+  audit log (existing `withTransaction`+`addAuditLog` pattern, `post-service.ts:428`
+  precedent); `deletedAt IS NULL` filter in every list/detail path; 404 on public detail
+  for non-authors (author keeps access to their own removed post, like closed posts);
+  `post_removed` notification to the author WITH the reason; moderator UI action in the
+  moderation panel. Reopen/edit on a removed post: BLOCKED (removal is terminal from the
+  author's perspective — no un-remove flow in MVP).
 
 ---
 
@@ -204,7 +226,9 @@ the plan's key list, no overlap). Not [HYBRID]/[BOSS].
 **Scope: approve/reject ONLY.** There is no `remove` moderation flow in the codebase (dead
 enum value `ModerationActionType.remove`, `schema.prisma:74`; `moderation/actions.ts`
 exports only approve :47 / reject :76 — see divergence note 3). The missing FR16 remove
-flow is user gate **U-7**, NOT part of this ticket; do not invent a remove action here.
+flow is ticket **T-G2-5** (rev 3: Ramon decided it is MVP, as a soft delete — D12);
+the guard added HERE is written generically enough that T-G2-5's `removePostTx` reuses
+it. Do not invent a remove action in this ticket.
 
 Files:
 - `src/server/services/post-service.ts` (`approvePostTx` :392, `rejectPostTx` :446 — add guard
@@ -293,9 +317,11 @@ Ramon reads the diff, no deploy needed).
 
 ## WAVE 2 (G-2) — small code: visibility, search, forms, listing
 
-Order: T-G2-1 first; then T-G2-2, T-G2-3, T-G2-4 run in parallel (disjoint files except the
-messages catalogs — new i18n keys are listed per ticket; merge order for catalog conflicts:
-rebase, keys are additive).
+Order: T-G2-1 first; then T-G2-2, T-G2-3, T-G2-4, T-G2-5 run in parallel (disjoint files
+except the messages catalogs — new i18n keys are listed per ticket; merge order for
+catalog conflicts: rebase, keys are additive). T-G2-5 additionally merges after T-G1-2
+(Wave 1 — it builds on that ticket's guard) — if Wave 1 is still open when Sisyphus
+reaches it, T-G2-5 waits for T-G1-2 only, not the whole wave.
 
 ### T-G2-1 — G-M: closed-posts author-only — verify end-to-end + close remaining hole
 
@@ -454,6 +480,119 @@ Acceptance criteria:
 Verification: `pnpm test` (fake updated), manual `/` browsing with seeds; `pnpm build`.
 
 Commit: `feat(listing): order+display by approval date, page size 10, numbered pagination (G-O)`
+
+### T-G2-5 — FR16: moderation `remove` as SOFT DELETE (decided D12)
+
+**Estimate:** 3–4 h. Runs after **T-G1-2** (inherits its author ≠ moderator guard) and
+after **T-G2-1** (extends its visibility test matrix; same file
+`post-service.test.ts`). `(P)` with T-G2-2/T-G2-3 (disjoint files); NOT `(P)` with
+T-G2-1 (shared test surface) — merge T-G2-1 first. Touches `messages/*.json` — catalog
+keys are listed below; rebase on the wave's other catalog tickets, keys are additive.
+Not [HYBRID]/[BOSS] (all semantics pre-decided in D12).
+
+Ground truth (verified 2026-10-05, `8b5b5b7`): `ModerationActionType.remove` exists as a
+dead enum value (`schema.prisma:74`, mapped `moderation_action_type`); `ModerationAction`
+model at `schema.prisma:282-295` already supports `action: remove` + `reason` (reason is
+service-enforced for reject — same pattern for remove); audit precedent
+`addAuditLog(buildPostAuditEntry(...))` at `post-service.ts:428`; `NotificationType`
+enum at `schema.prisma:91-99` (no `post_removed` yet); moderation panel UI at
+`src/app/[locale]/moderation/{page.tsx,moderation-card.tsx,actions.ts}` with
+`rejectPostAction`'s required-reason pattern (`actions.ts:76-90`).
+
+Files:
+- `prisma/schema.prisma` — `Post.deletedAt DateTime? @map("deleted_at") @db.Timestamptz()`
+  (after `closedAt` :232); `NotificationType.postRemoved` → `post_removed`; partial index
+  note. Prisma cannot declare partial indexes → raw SQL in the migration.
+- `prisma/migrations/<ts>_post_soft_delete/migration.sql` —
+  `ALTER TABLE "posts" ADD COLUMN "deleted_at" timestamptz;` +
+  `ALTER TYPE "notification_type" ADD VALUE 'post_removed';` +
+  partial unique index (follow the enum-add pattern of `20260816000002` — READ IT FIRST;
+  add the enum value BEFORE any statement that uses it; `ADD VALUE` is fine in PG 16 as
+  the migration's first statement): `CREATE UNIQUE INDEX "posts_status_filtered_uidx" ON
+  "posts" ("id") WHERE "deleted_at" IS NULL AND "status" = 'active';` — replace the
+  existing plain `posts_status_active_uidx` (or equivalent, verify actual name in
+  `20260718181500`/latest schema) so `deletedAt IS NULL` filtering is index-backed.
+- `src/server/services/post-service.ts` (+ co-located test):
+  - `removePost({ postId, moderator, reason })` → `removePostTx` in the SAME
+    `withTransaction` + `addAuditLog` pattern as `approvePostTx`/`rejectPostTx`
+    (`post-service.ts:392/:446`): guard `isModerator` (reuse :329) + the T-G1-2
+    author ≠ moderator guard; require non-empty `reason` (reject's pattern,
+    `rejectedReason` handling at :446+); allowed from `pending` AND `active` (any
+    non-removed status; removing an already-removed post → `PostNotFoundError`);
+    sets `deletedAt = now`, writes `ModerationAction {action: remove, reason}` and
+    audit action `post.remove`, queues `post_removed` notification to the AUTHOR with
+    payload `{ reason }` (reuse the post_rejected notification-creation pattern — find
+    it in `rejectPostTx`).
+  - Guard rails on the OTHER transitions (each a one-line status check + test):
+    `closePost` (:503), `reopenPost` (:562), `approvePost`, `rejectPost`,
+    `updatePost` — throw `PostNotFoundError` when `deletedAt !== null` (404-shaped,
+    matching the existing non-leaking posture documented at :744-747).
+  - `getPost` (:748): active post with `deletedAt` set behaves like a non-active post —
+    author or moderator only; everyone else (including anonymous) → `PostNotFoundError`
+    (public detail 404).
+  - `listMyPosts`/`listByAuthor` (:782): keep the author's removed posts visible to the
+    author themselves (removed = author-visible 404-for-others, like closed — D12).
+- `src/server/repositories/prisma-post-repository.ts` — add `deletedAt: null` to the
+    `where` of: `listActive` (:265), `listPending` (:300), `listByAuthor` (:290,
+    author's OWN view keeps removed rows — filter ONLY in public paths; verify against
+    the port docs at :192-196), the FTS path `searchActivePostsViaFtsIndex` (:395 region
+    — raw SQL: add `AND deleted_at IS NULL`), and `requirePost`/get-by-id used by
+    `getPost`. Port docs (`post-service.ts:180-212`) updated to state the
+    `deletedAt IS NULL` contract per port (EXPLICIT per port — chosen over a Prisma
+    middleware/deleted-default-scope: no global middleware exists in this repo today
+    and inventing one in this ticket widens blast radius; revisit post-MVP).
+  - In-memory fake (same test file's `repo.seed`/`makePost` helpers): support
+    `deletedAt`, filter in the fake's list methods to keep the port contract honest.
+- `src/app/[locale]/moderation/actions.ts` — `removePostAction` (clone
+  `rejectPostAction`'s shape :76-90: reason required → error `reasonRequired`; add
+  `postRemoved`/generic error key).
+- `src/app/[locale]/moderation/moderation-card.tsx` (+ test) — "Remove" action with
+  reason input (reuse the reject-reason UI pattern), confirm dialog, disabled while
+  pending; visible for pending AND active posts — the panel currently lists pending
+  only (`listPending`); add a moderator "removed/active posts" listing is OUT OF SCOPE
+  (panel scope unchanged — remove is reachable for pending posts in the queue; for
+  ACTIVE posts add the action to the post detail page's moderator controls — verify
+  where moderators act on active posts today; if nowhere, wire `removePostAction` into
+  `posts/[id]/page.tsx`'s moderator section, minimal button + reason).
+- `messages/{en,pt-PT,pt-BR}.json` — keys ×3: remove-action label, confirm title/body,
+  reason-required error, author-facing removed badge + notification strings
+  (`notifications.post_removed` with `{reason}`).
+- `src/app/[locale]/my-posts/*` — author's own removed posts render a "Removido pela
+  moderação" badge (status chip, no actions); edit/renew buttons hidden for removed.
+
+Acceptance criteria:
+- Moderator removes a pending post → `deletedAt` set, `ModerationAction{remove, reason}`
+  row, `post.remove` audit row, author `post_removed` notification with reason.
+- Moderator removes an ACTIVE post → same; post disappears from `/` listing, from FTS +
+  trigram search, and from every other public listing/route.
+- Public detail of a removed post → 404 for everyone except its author and moderators.
+- Author sees their removed post in my-posts with badge, cannot edit/reopen/renew it.
+- Moderator = author → guard blocks (T-G1-2 guard applies; test proves it).
+- Second remove on a removed post → `PostNotFoundError`; no duplicate rows.
+- All list ports return zero removed rows in public paths (fake-level assertions).
+- Migration applies via the sanctioned workaround; enum-add ordering correct.
+
+Tests (vitest, in-memory fake, co-located):
+- remove-from-pending happy path (state + ModerationAction + audit + notification rows)
+- remove-from-active happy path (same, plus listing/search now exclude it)
+- author ≠ moderator guard blocks remove (self-removal)
+- non-moderator remove → UnauthorizedPostActionError; empty reason → validation error
+- list filtering: removed post absent from listActive/listPending/search; present in
+  author's own listByAuthor
+- getPost 404 route guard: removed post → PostNotFoundError for stranger + anonymous,
+  visible to author and moderator
+- audit-log row exists with action `post.remove` and reason in metadata
+- transition guards: close/reopen/approve/reject/edit on removed → PostNotFoundError
+
+Verification: `pnpm vitest run src/server/services/post-service.test.ts`; full `pnpm
+test`; migration on local DB via the sanctioned workaround (Hard constraint #4):
+`docker compose up -d db && pnpm prisma db execute --file prisma/migrations/<ts>_post_soft_delete/migration.sql --schema prisma/schema.prisma && pnpm prisma migrate resolve --applied <ts>_post_soft_delete`; manual: remove a seeded active post as moderator, reload `/` (gone),
+open its URL logged-out (404), log in as author (badge + notification with reason).
+
+Commit: `feat(moderation): FR16 soft-delete remove action — deletedAt, post_removed notice, hidden everywhere (D12)`
+
+Evidence: test names + run output, migration outputs, screenshots of `/` before/after,
+psql `SELECT id, status, deleted_at FROM posts WHERE deleted_at IS NOT NULL`.
 
 **Wave 2 merge gate:** per-PR review + CI green; G-N requires the reviewer to have applied
 the migration locally via the `db execute` + `migrate resolve` workaround (Hard constraint
@@ -632,15 +771,13 @@ These require product/GDPR decisions before any ticket is written. Do NOT implem
   forms, schema, crypto layer. Needs Ramon's call; small ticket once decided.
 - **U-6 — moderator alert on new pending post.** No handwritten answer (decisions §17);
   optional `Notification` to moderators on `createPost`. Cheap ticket if wanted; needs a yes.
-- **U-7 / FR16 — missing `remove` moderation flow (NEW, rev 2).** FR16 promises
-  "approve, reject, or remove", but only approve/reject exist: `ModerationActionType.remove`
-  is a dead enum value (`schema.prisma:74`), there is no `removePost` service method, no
-  action, no UI, no delete call. Decisions §1.5 ("remove is a hard delete — matches") is
-  wrong about the code (divergence note 3). Decisions needed from Ramon: (a) is remove a
-  hard delete vs status change; (b) who may remove (moderator-any-post? admin-only?);
-  (c) what happens to the author's data / notifications / interested users (interacts with
-  the U-2 GDPR question); (d) does it get the author ≠ moderator conflict-of-interest guard
-  from T-G1-2. Until decided, the enum value stays dead — no ticket.
+- ~~**U-7 / FR16 — missing `remove` moderation flow.**~~ **DECIDED (rev 3, Ramon
+  2026-10-05): remove IS MVP and is a SOFT DELETE.** Left the HOLD list; implemented as
+  ticket **T-G2-5** (Wave 2, after T-G2-1) with all semantics pinned in decision D12.
+  Original open questions (hard vs soft delete; who may remove; author-data/notifications
+  treatment; conflict-of-interest guard) are all answered by D12: soft delete via
+  `deletedAt`; any non-author moderator; author notified with reason, data retained;
+  T-G1-2 guard inherited.
 
 ## Hard constraints (all waves)
 
@@ -673,16 +810,20 @@ These require product/GDPR decisions before any ticket is written. Do NOT implem
 
 ## Done-when (milestone exit)
 
-- All 11 tickets merged (4 + 4 + 3), each with green CI, migration evidence where applicable.
+- All 12 tickets merged (4 + 5 + 3), each with green CI, migration evidence where applicable.
 - `pnpm test` suite covers: self-moderation guard, full visibility matrix, username
   validation/uniqueness, email-verification gating (post+interest), expiry lifecycle
-  (approve/renew/reopen/sweep/reminder-dedupe), pagination/ordering via updated fakes.
+  (approve/renew/reopen/sweep/reminder-dedupe), pagination/ordering via updated fakes,
+  FR16 soft delete (remove-from-pending/active, list filtering, 404 route guard,
+  audit row, author notification with reason).
 - Manual verification on local (or staging) DB: accent search finds `água`↔`agua`;
   page size 10 numbered pagination; approval-date on cards; signup→verify→publish flow;
   unverified user blocked from publish+interest; username uniqueness case-insensitive;
-  my-posts renew button extends expiry; expired post auto-closes via worker sweep.
-- HOLD list (U-1..U-7) presented to Ramon with options; outcomes recorded as new tickets or
-  explicit wont-do.
+  my-posts renew button extends expiry; expired post auto-closes via worker sweep;
+  moderator remove of an active post hides it from `/` + search, public URL 404s,
+  author sees removed badge + reason notification.
+- HOLD list (U-1..U-6) presented to Ramon with options; outcomes recorded as new tickets or
+  explicit wont-do. (U-7 was DECIDED rev 3 → T-G2-5; it is no longer a gate.)
 - No HOLD item implemented without a decision.
 
 ## First 3 executor tasks (start the moment review passes)
