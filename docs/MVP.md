@@ -31,7 +31,7 @@ Origin: an earlier volunteering platform (`voluntariado.casadacidade.com`) exist
 - **FR02 — Categorization**: Every post belongs to one category (volunteering or donation) and one type (request or offer), enabling filtering.
 - **FR03 — Edit post**: Author can edit title, description, and contact info while the post is active.
 - **FR04 — Close post**: Author can mark a post as "resolved/fulfilled," removing it from the active listing and signaling to interested parties that it's no longer needed.
-- **FR05 — Reopen post**: Author can reopen a previously closed post.
+- **FR05 — Reopen post**: Author can reopen a previously closed post. Reopening goes `closed → active` directly, with no re-moderation: editing an active post never resets it to pending (decided behavior — see `docs/QA-REVIEW-DECISIONS.md` §7), so the reopened post returns to the listing without moderator re-approval. The reopened post keeps its original `publishedAt` (ordering by original publication date — "com a primeira") and keeps the interests expressed in the previous cycle.
 
 ### 3.2 Discovery ("shop window")
 - **FR06 — Active listing**: Show all active posts, sortable by date, filterable by category and type.
