@@ -14,6 +14,18 @@ SOFT DELETE — see D12). U-7 leaves the HOLD list and becomes ticket **T-G2-5**
 after T-G2-1 — same files). Ticket count 11 → 12 (4 + 5 + 3); no other ticket renumbered.
 Divergence note 3 and the QA-doc §1.5 correction updated accordingly.
 
+Rev 4 (2026-10-05): reworked per Momus round-2 review (card `t_24061568`, comment #77 —
+REQUEST_CHANGES, 2 blocking + 3 minor, all in the rev-3 delta D12/T-G2-5). T-G2-5:
+partial-unique-index migration DROPPED (the index it "replaced" does not exist — the only
+status index is the plain composite `posts_status_category_id_type_idx`, init :182, which
+stays untouched; `UNIQUE(id)` on a PK is vacuous); `(P)` claim with T-G2-2/T-G2-3 removed
+(same-method collisions in `prisma-post-repository.ts` + `post-service.ts`) — T-G2-5 now
+serialized AFTER T-G2-2 and T-G2-3; `listByAuthor` explicitly UNCHANGED (author keeps
+removed rows); estimate 3–4 h → 6–8 h (repo-law test matrix); moderator remove control
+for active posts pinned to `posts/[id]/page.tsx` (no moderator control exists there today
+— role is used for visibility only, `:31`). Rev-2 content untouched (approved round 2,
+card `t_f7b5a7d9`).
+
 Binding repo law (verified this run, commit `8b5b5b7` on `main`):
 `AGENTS.md` (port pattern, co-located tests, i18n cookie, RBAC layering, audit-log-on-transition),
 `CLAUDE.md` (project context), `docs/MVP.md` (BR01), `prisma/schema.prisma`.
@@ -317,11 +329,17 @@ Ramon reads the diff, no deploy needed).
 
 ## WAVE 2 (G-2) — small code: visibility, search, forms, listing
 
-Order: T-G2-1 first; then T-G2-2, T-G2-3, T-G2-4, T-G2-5 run in parallel (disjoint files
+Order: T-G2-1 first; then T-G2-2, T-G2-3, T-G2-4 may run in parallel (disjoint files
 except the messages catalogs — new i18n keys are listed per ticket; merge order for
-catalog conflicts: rebase, keys are additive). T-G2-5 additionally merges after T-G1-2
-(Wave 1 — it builds on that ticket's guard) — if Wave 1 is still open when Sisyphus
-reaches it, T-G2-5 waits for T-G1-2 only, not the whole wave.
+catalog conflicts: rebase, keys are additive). **T-G2-5 is NOT parallel with anything
+(rev 4)**: it edits the same methods as T-G2-2 (FTS conditions block,
+`prisma-post-repository.ts:384-397`; `prisma/schema.prisma`) and T-G2-3 (repo
+`listActive` rewrite + `post-service.ts` listActive path) — parallel branches risk a
+rebase silently dropping the `deletedAt` filter inside T-G2-3's rewritten `listActive`.
+Serialize: **merge T-G2-2, then T-G2-3, then rebase-and-merge T-G2-5** (no parallel
+worktree for T-G2-5). T-G2-5 additionally merges after T-G1-2 (Wave 1 — it builds on
+that ticket's guard) — if Wave 1 is still open when Sisyphus reaches it, T-G2-5 waits
+for T-G1-2 only, not the whole wave.
 
 ### T-G2-1 — G-M: closed-posts author-only — verify end-to-end + close remaining hole
 
@@ -483,12 +501,17 @@ Commit: `feat(listing): order+display by approval date, page size 10, numbered p
 
 ### T-G2-5 — FR16: moderation `remove` as SOFT DELETE (decided D12)
 
-**Estimate:** 3–4 h. Runs after **T-G1-2** (inherits its author ≠ moderator guard) and
-after **T-G2-1** (extends its visibility test matrix; same file
-`post-service.test.ts`). `(P)` with T-G2-2/T-G2-3 (disjoint files); NOT `(P)` with
-T-G2-1 (shared test surface) — merge T-G2-1 first. Touches `messages/*.json` — catalog
-keys are listed below; rebase on the wave's other catalog tickets, keys are additive.
-Not [HYBRID]/[BOSS] (all semantics pre-decided in D12).
+**Estimate:** 6–8 h (rev 4 — honest per the repo-law test matrix below; the round-1
+standard applied to T-G3-3). Runs after **T-G1-2** (inherits its author ≠ moderator
+guard) and after **T-G2-1** (extends its visibility test matrix; same file
+`post-service.test.ts`). **NOT `(P)` with anything in Wave 2 (rev 4)**: it edits the
+same methods as T-G2-2 (FTS conditions block `prisma-post-repository.ts:384-397`;
+`prisma/schema.prisma`) and T-G2-3 (repo `listActive` rewrite; `post-service.ts`
+listActive path) — same-hunk conflicts, and a rebase could silently drop the
+`deletedAt` filter inside T-G2-3's rewritten `listActive`. **Merge order: T-G2-2 →
+T-G2-3 → rebase T-G2-5 → merge. Sequential, no parallel worktree.** Touches
+`messages/*.json` — catalog keys are listed below; rebase on the wave's other catalog
+tickets, keys are additive. Not [HYBRID]/[BOSS] (all semantics pre-decided in D12).
 
 Ground truth (verified 2026-10-05, `8b5b5b7`): `ModerationActionType.remove` exists as a
 dead enum value (`schema.prisma:74`, mapped `moderation_action_type`); `ModerationAction`
@@ -501,17 +524,22 @@ enum at `schema.prisma:91-99` (no `post_removed` yet); moderation panel UI at
 
 Files:
 - `prisma/schema.prisma` — `Post.deletedAt DateTime? @map("deleted_at") @db.Timestamptz()`
-  (after `closedAt` :232); `NotificationType.postRemoved` → `post_removed`; partial index
-  note. Prisma cannot declare partial indexes → raw SQL in the migration.
+  (after `closedAt` :232); `NotificationType.postRemoved` → `post_removed`. No index
+  DDL in schema (Prisma cannot declare partial indexes).
 - `prisma/migrations/<ts>_post_soft_delete/migration.sql` —
   `ALTER TABLE "posts" ADD COLUMN "deleted_at" timestamptz;` +
-  `ALTER TYPE "notification_type" ADD VALUE 'post_removed';` +
-  partial unique index (follow the enum-add pattern of `20260816000002` — READ IT FIRST;
-  add the enum value BEFORE any statement that uses it; `ADD VALUE` is fine in PG 16 as
-  the migration's first statement): `CREATE UNIQUE INDEX "posts_status_filtered_uidx" ON
-  "posts" ("id") WHERE "deleted_at" IS NULL AND "status" = 'active';` — replace the
-  existing plain `posts_status_active_uidx` (or equivalent, verify actual name in
-  `20260718181500`/latest schema) so `deletedAt IS NULL` filtering is index-backed.
+  `ALTER TYPE "notification_type" ADD VALUE 'post_removed';` (follow the enum-add
+  pattern of `20260816000002` — READ IT FIRST; add the enum value BEFORE any statement
+  that uses it; `ADD VALUE` is fine in PG 16 as the migration's first statement).
+  **NO index DDL (rev 4):** the only status index is the plain composite
+  `posts_status_category_id_type_idx` (`20260718180401_init/migration.sql:182`) on
+  `("status","category_id","type")` — it stays UNTOUCHED and continues to back the
+  listing queries; the new `deleted_at IS NULL` predicate is evaluated as a filter on
+  top of it. (The rev-3 `posts_status_active_uidx` it claimed to "replace" does not
+  exist — grep exit 1 repo-wide; and `UNIQUE(id)` on the PK is vacuous. Post.status
+  uniqueness is NOT a goal — it never was, the state machine lives in the service
+  layer.) If post-hoc EXPLAIN on seeded data ever shows the filter costing, ADD a
+  partial index in a SEPARATE follow-up ticket with EXPLAIN evidence — not here.
 - `src/server/services/post-service.ts` (+ co-located test):
   - `removePost({ postId, moderator, reason })` → `removePostTx` in the SAME
     `withTransaction` + `addAuditLog` pattern as `approvePostTx`/`rejectPostTx`
@@ -533,14 +561,16 @@ Files:
   - `listMyPosts`/`listByAuthor` (:782): keep the author's removed posts visible to the
     author themselves (removed = author-visible 404-for-others, like closed — D12).
 - `src/server/repositories/prisma-post-repository.ts` — add `deletedAt: null` to the
-    `where` of: `listActive` (:265), `listPending` (:300), `listByAuthor` (:290,
-    author's OWN view keeps removed rows — filter ONLY in public paths; verify against
-    the port docs at :192-196), the FTS path `searchActivePostsViaFtsIndex` (:395 region
-    — raw SQL: add `AND deleted_at IS NULL`), and `requirePost`/get-by-id used by
-    `getPost`. Port docs (`post-service.ts:180-212`) updated to state the
-    `deletedAt IS NULL` contract per port (EXPLICIT per port — chosen over a Prisma
-    middleware/deleted-default-scope: no global middleware exists in this repo today
-    and inventing one in this ticket widens blast radius; revisit post-MVP).
+  `where` of: `listActive` (:265), `listPending` (:300), the FTS path
+  `searchActivePostsViaFtsIndex` (:395 region — raw SQL: add `AND deleted_at IS
+  NULL`), and `requirePost`/get-by-id used by `getPost`. **`listByAuthor` (:290) is
+  UNCHANGED (rev 4) — the author's own view KEEPS removed rows** (D12 author-keeps-
+  visibility rule; port docs `post-service.ts:188-192` intentionally do not filter by
+  status; the "Removido" badge in my-posts depends on it). Do NOT add `deletedAt`
+  filtering there. Port docs (`post-service.ts:180-212`) updated to state the
+  `deletedAt IS NULL` contract per port (EXPLICIT per port — chosen over a Prisma
+  middleware/deleted-default-scope: no global middleware exists in this repo today
+  and inventing one in this ticket widens blast radius; revisit post-MVP).
   - In-memory fake (same test file's `repo.seed`/`makePost` helpers): support
     `deletedAt`, filter in the fake's list methods to keep the port contract honest.
 - `src/app/[locale]/moderation/actions.ts` — `removePostAction` (clone
@@ -548,12 +578,16 @@ Files:
   `postRemoved`/generic error key).
 - `src/app/[locale]/moderation/moderation-card.tsx` (+ test) — "Remove" action with
   reason input (reuse the reject-reason UI pattern), confirm dialog, disabled while
-  pending; visible for pending AND active posts — the panel currently lists pending
-  only (`listPending`); add a moderator "removed/active posts" listing is OUT OF SCOPE
-  (panel scope unchanged — remove is reachable for pending posts in the queue; for
-  ACTIVE posts add the action to the post detail page's moderator controls — verify
-  where moderators act on active posts today; if nowhere, wire `removePostAction` into
-  `posts/[id]/page.tsx`'s moderator section, minimal button + reason).
+  pending; visible for pending posts in the queue. A moderator "removed/active posts"
+  listing is OUT OF SCOPE (panel scope unchanged).
+- `src/app/[locale]/posts/[id]/page.tsx` (+ test if a page test exists) — **PINNED
+  (rev 4, planner decision — no executor verification step): this ticket ADDS a
+  minimal moderator remove control for ACTIVE posts to the post detail page** —
+  button + reason input + confirm, calling `removePostAction`, gated on the viewer's
+  moderator role (the page already computes `role` at `:31`; today there is NO
+  moderator control on this page — role is used for visibility only; the moderation
+  panel lists pending only). Reject pattern (label/reason-required/confirm) reused
+  verbatim; no other detail-page changes.
 - `messages/{en,pt-PT,pt-BR}.json` — keys ×3: remove-action label, confirm title/body,
   reason-required error, author-facing removed badge + notification strings
   (`notifications.post_removed` with `{reason}`).
