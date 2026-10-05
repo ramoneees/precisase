@@ -49,7 +49,7 @@ Origin: an earlier volunteering platform (`voluntariado.casadacidade.com`) exist
 - **FR14 — Post history**: User can view their own posts (active and closed).
 
 ### 3.5 Moderation
-- **FR15 — Approval workflow**: New posts from users without prior trusted history require moderator approval before going live.
+- **FR15 — Approval workflow**: Every post requires moderator approval before going live (BR01).
 - **FR16 — Moderation panel**: Simple admin area to approve, reject, or remove posts.
 
 ## 4. Business rules (BR)
