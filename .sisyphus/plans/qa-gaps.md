@@ -5,6 +5,10 @@ Prometheus plan for Sisyphus (OpenCode exec). Scope: implement the QA review dec
 implements nothing.** Style follows compasso `a04b7e0` / `m1-wave1.md` (ground truth →
 decisions → tasks → hard constraints → done-when).
 
+Rev 2 (2026-10-05): reworked per Momus round-1 review (card `t_9068ca20`, comment #76 —
+REQUEST_CHANGES, 3 blocking + 4 minor). All 7 findings addressed; scope unchanged
+(11 tickets, no renumbering); one NEW user gate added (U-7, FR16 remove flow).
+
 Binding repo law (verified this run, commit `8b5b5b7` on `main`):
 `AGENTS.md` (port pattern, co-located tests, i18n cookie, RBAC layering, audit-log-on-transition),
 `CLAUDE.md` (project context), `docs/MVP.md` (BR01), `prisma/schema.prisma`.
@@ -59,6 +63,17 @@ tests, in-memory port fakes). `package.json` @ 8b5b5b7.
   folded into HOLD gate U-3.
 - i18n: catalogs `messages/{en,pt-PT,pt-BR}.json`; string parity across the 3 files is the
   repo convention; docs in English (AGENTS.md "never edit code-side strings").
+- Migrations: `prisma migrate dev` is **broken on this repo** (AGENTS.md:110 — shadow-DB
+  replay collision in `20260718192700_add_user_church_affiliation`, `CREATE INDEX`
+  without `IF NOT EXISTS`). Sanctioned workaround: apply each new migration with
+  `pnpm prisma db execute --file <migration.sql> --schema prisma/schema.prisma`, then
+  record it with `pnpm prisma migrate resolve --applied <migration_name>`. This is the
+  verification path every migration ticket below uses.
+- No `remove` moderation flow exists. `ModerationActionType.remove` is a dead enum value
+  (`schema.prisma:74`); `src/app/[locale]/moderation/actions.ts` exports only
+  `approvePostAction` (:47) and `rejectPostAction` (:76); no `removePost` service method,
+  no UI, no Prisma delete anywhere. FR16 ("approve, reject, or remove") is partially
+  unbuilt → U-7.
 
 ### Divergence notes vs docs/QA-REVIEW-DECISIONS.md (must-read for Sisyphus)
 
@@ -68,6 +83,15 @@ tests, in-memory port fakes). `package.json` @ 8b5b5b7.
    doc's "check public detail-route" claim.**
 2. Decisions §17 (notifications in-app only): treated as already-resolved divergence — the
    doc itself says "flag, don't rip out". No ticket.
+3. **Decisions §1.5 ("✅ remove is a hard delete — matches") is FALSE about the code.**
+   The `remove` moderation flow does not exist (see ground truth above): only the enum
+   value and the `ModerationActionRecord` type union. T-G1-2 is therefore scoped to
+   approve/reject only; the missing FR16 remove flow is escalated as user gate **U-7** —
+   it is a NEW gap for Ramon, not something a guard ticket invents.
+4. i18n terminology (G-L): Momus's round-1 grep found **zero** occurrences of
+   `necessidade`/`petição`/`procura` as type nouns in the pt-PT/pt-BR catalogs, `pedido`/
+   `oferta` already consistent, and perfect key parity (340/340/340 identical sets).
+   T-G1-4 is a verify-and-fix-residue pass, not a rewrite.
 
 ### Decisions settled in this plan (bind all tickets; Sisyphus does not re-decide)
 
@@ -91,11 +115,21 @@ tests, in-memory port fakes). `package.json` @ 8b5b5b7.
 - **D4 (G-O).** `PostSummary`/`PostCard` display `publishedAt` (approval date) instead of
   `createdAt`. `PostSummary` already carries `publishedAt` (`post-service.ts:128`) — card
   + page wire-up only. Card date label i18n key updated in all 3 locales.
-- **D5 (G-N).** `unaccent` applied at BOTH index and query sides:
-  `to_tsvector(cfg, unaccent(title || ' ' || description))` generated column (drop+recreate,
-  raw SQL, per existing `20260718181500` pattern) and `plainto_tsquery(cfg, unaccent(search))`.
-  pg_trgm indexes stay untouched (partial-match path unchanged). New raw-SQL migration only;
-  schema.prisma `searchVector` comment updated.
+- **D5 (G-N).** `unaccent` applied at BOTH index and query sides. **Index side requires an
+  IMMUTABLE wrapper**: `unaccent()` is STABLE and generated-column expressions must be
+  IMMUTABLE, so `to_tsvector(cfg, unaccent(...))` fails at `ALTER TABLE` ("generation
+  expression is not immutable"). Add (in the same migration, mirroring the
+  `posts_search_config` precedent in `20260718181500:14-29`):
+  `CREATE FUNCTION immutable_unaccent(text) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL
+  SAFE STRICT AS $$ SELECT unaccent('public.unaccent'::regdictionary, $1) $$;`
+  — schema-qualified two-argument form pins the dictionary and search_path (PG docs F.48,
+  https://postgresql.org/docs/current/unaccent.html, accessed 2026-10-05). Generated column
+  becomes `to_tsvector(posts_search_config(locale), immutable_unaccent(title || ' ' ||
+  description))` (drop+recreate, raw SQL). **Query side keeps plain `unaccent(search)`**
+  (no immutability needed outside a generated column/index). `unaccent` is also added to
+  the datasource `extensions` list in schema.prisma (currently `[pgcrypto, citext,
+  pg_trgm]` at :19) alongside the raw `CREATE EXTENSION IF NOT EXISTS unaccent;`, keeping
+  schema and DB consistent. pg_trgm indexes stay untouched.
 - **D6 (G-I).** Blocked-action set = `createPost` + `expressInterest` (both entry points into
   community contact; publishing without verification would make the chat gate trivially
   bypassable). Chatting on an EXISTING conversation stays allowed (a verified-then-changed-email
@@ -111,9 +145,11 @@ tests, in-memory port fakes). `package.json` @ 8b5b5b7.
   (`admin`, `moderador`, `moderator`, `root`, `system`, `suporte`, `support`, `api`, `null`)
   — keep the list in one exported const next to the signup validation. Signup form gains a
   username field (required); existing users get a migration backfill
-  `username = 'user-' || left(id::text, 8)` then a forced-choose screen? NO — MVP-safe:
-  backfill + profile edit field; post author chip shows `username` falling back to
-  `displayName` when null (legacy). displayName stays (not unique, remains on profile).
+  `username = 'user_' || left(md5(id::text), 8)` — underscore, NOT hyphen: the format
+  MUST validate against D7's own `^[a-z0-9_.]+$` (a `'user-'` prefix would violate the
+  regex every legacy row is expected to satisfy). Then profile edit field; post author
+  chip shows `username` falling back to `displayName` when null (legacy). displayName
+  stays (not unique, remains on profile).
 - **D8 (G-P).** Dirty-form warning = `beforeunload` + in-app navigation guard, both via a
   small `useUnsavedChanges(dirty: boolean)` hook in `src/lib/` (client). Applied to
   `create-post-form.tsx` and `edit-post-form.tsx`. Dirty = any field changed from initial
@@ -165,6 +201,11 @@ Evidence: diff + grep output in the PR body.
 **Estimate:** 1–2 h. `(P)` (touches only post-service + its test; coordinate with T-G1-4 via
 the plan's key list, no overlap). Not [HYBRID]/[BOSS].
 
+**Scope: approve/reject ONLY.** There is no `remove` moderation flow in the codebase (dead
+enum value `ModerationActionType.remove`, `schema.prisma:74`; `moderation/actions.ts`
+exports only approve :47 / reject :76 — see divergence note 3). The missing FR16 remove
+flow is user gate **U-7**, NOT part of this ticket; do not invent a remove action here.
+
 Files:
 - `src/server/services/post-service.ts` (`approvePostTx` :392, `rejectPostTx` :446 — add guard
   right after the `isModerator` check)
@@ -172,20 +213,16 @@ Files:
 
 Directive: if `moderator.id === post.authorId` → throw `UnauthorizedPostActionError` (exists,
 imported in `moderation/actions.ts:20`) with message "Moderators cannot moderate their own
-posts." (QA §4: "Não pode"). Applies to both approve and reject. `remove` (hard delete) gets
-the same guard — check `ModerationActionType.remove` handling; if `remove` lives outside
-these two Tx methods, add the guard there too (decisions §8 treats remove as a moderation
-action with the same conflict-of-interest rule).
+posts." (QA §4: "Não pode"). Applies to both approve and reject.
 
 Acceptance criteria:
-- approve/reject(/remove if in service) by the post's own author-moderator throws
+- approve/reject by the post's own author-moderator throws
   `UnauthorizedPostActionError`, transaction aborts, no `ModerationAction` row, no status change.
 - Approve/reject by a DIFFERENT moderator still works (existing tests keep passing).
 - Admin is NOT exempt (role `admin` authoring a post gets the same block).
 
 Tests (vitest, in-memory fake, co-located — repo convention):
-- `throws when a moderator approves their own post` / `... rejects their own post` /
-  `... removes their own post`
+- `throws when a moderator approves their own post` / `... rejects their own post`
 - `allows a moderator to approve another author's post` (guard-not-too-greedy)
 - `blocks an admin authoring-moderator too` (admin != bypass)
 
@@ -215,12 +252,17 @@ Verification: `pnpm vitest run src/server/services/post-service.test.ts` (must b
 
 Commit: `docs(reopen): reopen never re-moderates; keeps publishedAt and prior interests (G-F)`
 
-### T-G1-4 — G-L: terminology pass, 3 locales
+### T-G1-4 — G-L: terminology verify-and-fix-residue, 3 locales
 
-**Estimate:** 2–3 h. `(P)` (message catalogs only; touches no TS). Not [HYBRID]/[BOSS].
+**Estimate:** ~1 h. `(P)` (message catalogs only; touches no TS). Not [HYBRID]/[BOSS].
+
+**Premise (rev 2):** round-1 grep found ZERO stray `necessidade`/`petição`/`procura`
+type-nouns in the pt catalogs, `pedido`/`oferta` already consistent, and 340/340/340 key
+parity (divergence note 4). This is a verification pass that fixes whatever residue it
+finds — NOT a rewrite. Expected outcome: no-op diff or near-no-op.
 
 Files:
-- `messages/pt-PT.json`, `messages/pt-BR.json`, `messages/en.json` (full audit)
+- `messages/pt-PT.json`, `messages/pt-BR.json`, `messages/en.json` (audit)
 - `docs/MVP.md` ONLY IF a user-visible FR string is quoted there inconsistently (check, likely no)
 
 Directive (D9): audit every user-facing string for request/offer noun consistency. Rules:
@@ -232,13 +274,14 @@ Directive (D9): audit every user-facing string for request/offer noun consistenc
 
 Acceptance criteria:
 - No `necessidade`/`petição`/`procura` string survives in any catalog as a type descriptor
-  (grep list in evidence).
+  (grep list in evidence — expected empty; if non-empty, that is the residue fixed).
 - The 3 catalogs keep identical key sets (parity check — count keys per file, must match).
 - Visual smoke: `/` shop window + `/posts/new` in pt-PT shows pedido/oferta consistently.
 
-Verification: `node -e` key-parity script (or jq) proving equal key sets; grep evidence.
+Verification: `node -e` key-parity script (or jq) proving equal key sets; grep evidence
+(expected: zero matches, proving the round-1 finding holds at merge time).
 
-Commit: `chore(i18n): unify request/offer terminology across en, pt-PT, pt-BR (G-L)`
+Commit: `chore(i18n): verify request/offer terminology consistency across en, pt-PT, pt-BR (G-L)`
 
 Evidence: grep before/after + key-parity output.
 
@@ -293,23 +336,37 @@ has no DB, the migration SQL is still complete and verified syntax-wise; flag in
 Files:
 - `prisma/migrations/<ts>_post_search_unaccent/migration.sql` (new, raw SQL)
 - `src/server/repositories/prisma-post-repository.ts` (:384 query — wrap search with `unaccent()`)
-- `prisma/schema.prisma` (comment on `Post.searchVector` — mention unaccent)
+- `prisma/schema.prisma` (datasource `extensions` += `unaccent` — currently `[pgcrypto,
+  citext, pg_trgm]` at :19; plus comment on `Post.searchVector` — mention immutable_unaccent)
 - `prisma/migrations/<ts>_post_search_unaccent/migration.sql` must follow the drop/recreate
   pattern of `20260718181500` (search_vector is a raw-SQL managed column; Prisma can't diff it)
 
-Migration content (per D5):
+Migration content (per D5 — note the IMMUTABLE wrapper; plain `unaccent()` in a generated
+column is rejected by Postgres, "generation expression is not immutable", because the
+function is STABLE):
 ```sql
 CREATE EXTENSION IF NOT EXISTS unaccent;
--- drop dependent index first, then column, then recreate with unaccent, then index
+
+-- IMMUTABLE wrapper, mirroring posts_search_config in 20260718181500:14-29.
+-- Two-argument, schema-qualified form pins dictionary + search_path (PG docs F.48).
+CREATE OR REPLACE FUNCTION immutable_unaccent(text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+STRICT
+AS $$ SELECT unaccent('public.unaccent'::regdictionary, $1) $$;
+
+-- drop dependent index first, then column, then recreate with immutable_unaccent, then index
 DROP INDEX IF EXISTS "posts_search_vector_idx";
 ALTER TABLE "posts" DROP COLUMN IF EXISTS "search_vector";
 ALTER TABLE "posts" ADD COLUMN "search_vector" tsvector
     GENERATED ALWAYS AS (
-        to_tsvector(posts_search_config(locale), unaccent(coalesce(title, '') || ' ' || coalesce(description, '')))
+        to_tsvector(posts_search_config(locale), immutable_unaccent(coalesce(title, '') || ' ' || coalesce(description, '')))
     ) STORED;
 CREATE INDEX "posts_search_vector_idx" ON "posts" USING GIN ("search_vector");
 ```
-Query side (`searchActivePostsViaFtsIndex`): `plainto_tsquery(posts_search_config(locale), unaccent(${search}))`.
+Query side (`searchActivePostsViaFtsIndex`): `plainto_tsquery(posts_search_config(locale), unaccent(${search}))` — plain `unaccent()` is fine here (no immutability required outside a generated column).
 
 Acceptance criteria:
 - Migration applies cleanly on a fresh DB and on the current dev DB (CONCURRENTLY not needed —
@@ -321,10 +378,12 @@ Acceptance criteria:
 - Unit tests: none possible without live DB (repo layer is Prisma-only by law) — evidence is
   psql/manual verification; keep service tests untouched-green.
 
-Verification: `docker compose up -d db && pnpm prisma migrate dev` (or repo's Makefile
-equivalent — check `Makefile`), then manual search queries; `pnpm test`.
+Verification (per Hard constraint #4 — `prisma migrate dev` is broken on this repo,
+AGENTS.md:110; use the sanctioned workaround):
+`docker compose up -d db && pnpm prisma db execute --file prisma/migrations/<ts>_post_search_unaccent/migration.sql --schema prisma/schema.prisma && pnpm prisma migrate resolve --applied <ts>_post_search_unaccent`,
+then manual search queries; `pnpm test`.
 
-Commit: `feat(search): accent-insensitive full-text search via unaccent (G-N)`
+Commit: `feat(search): accent-insensitive full-text search via immutable unaccent wrapper (G-N)`
 
 ### T-G2-3 — G-P: unsaved-changes warning on post forms
 
@@ -397,8 +456,9 @@ Verification: `pnpm test` (fake updated), manual `/` browsing with seeds; `pnpm 
 Commit: `feat(listing): order+display by approval date, page size 10, numbered pagination (G-O)`
 
 **Wave 2 merge gate:** per-PR review + CI green; G-N requires the reviewer to have applied
-the migration locally (or trust CI's fresh-DB run if one exists — verify whether CI runs
-`prisma migrate deploy`; today there is NO CI DB run — see Hard constraints #4).
+the migration locally via the `db execute` + `migrate resolve` workaround (Hard constraint
+#4 — there is NO CI DB run today; nobody can rely on `prisma migrate dev` until the
+`20260718192700` shadow-DB bug is fixed).
 
 ---
 
@@ -419,7 +479,8 @@ Files:
   nullable during backfill, then tighten? NO: keep nullable-unique forever; citext unique
   index; validation `3..24`, regex, reserved words at the service layer per D7)
 - `prisma/migrations/<ts>_add_user_username/migration.sql` (column + unique citext index +
-  backfill `username = 'user-' || lower(left(md5(id::text), 8))` deterministic)
+  backfill `username = 'user_' || lower(left(md5(id::text), 8))` deterministic — underscore
+  prefix per D7, validates against `^[a-z0-9_.]+$`)
 - `src/server/auth/user-repository.ts` (signup: accept + persist username; unique-violation →
   typed error)
 - `src/app/[locale]/signup/signup-form.tsx` (+ test): required username field, client
@@ -440,7 +501,8 @@ Acceptance criteria:
 - Unit tests: validation (regex/length/reserved) + duplicate signup path (in-memory fake);
   form test for field presence + error display.
 
-Verification: `pnpm test`; migrate on local DB; manual signup.
+Verification: `pnpm test`; migration on local DB via the sanctioned workaround (Hard
+constraint #4): `pnpm prisma db execute --file prisma/migrations/<ts>_add_user_username/migration.sql --schema prisma/schema.prisma && pnpm prisma migrate resolve --applied <ts>_add_user_username`; manual signup.
 
 Commit: `feat(users): username unique identifier — citext unique, signup field, author chip (G-J)`
 
@@ -481,14 +543,18 @@ Acceptance criteria:
 - Unit tests: issue/verify/replay/expiry on in-memory fake; guards on both services; backfill
   SQL verified on local DB.
 
-Verification: `pnpm test`; local migrate; manual: signup → (dev mail catch) → verify → publish.
+Verification: `pnpm test`; local migration via the sanctioned workaround (Hard constraint
+#4): `pnpm prisma db execute --file prisma/migrations/<ts>_add_email_verification/migration.sql --schema prisma/schema.prisma && pnpm prisma migrate resolve --applied <ts>_add_email_verification`; manual: signup → (dev mail catch) → verify → publish.
 
 Commit: `feat(auth): email verification gate on publish and interest (G-I)`
 
 ### T-G3-3 — G-E: 60-day expiry + renewal + reminder + sweep
 
-**Estimate:** 4 h. Last in wave 3 (touches schema, notifications, worker, my-posts UI). Not
-[HYBRID]/[BOSS] (60/7 constants are plan decisions, D1/D2).
+**Estimate:** 6–8 h (rev 2: 4 h was not honest for schema+migration with enum care + 3
+service methods + sweep + reminder dedupe + worker gating + my-posts UI + 3-locale i18n +
+full test matrix + manual time-travel verification). Last in wave 3 (touches schema,
+notifications, worker, my-posts UI). Not [HYBRID]/[BOSS] (60/7 constants are plan
+decisions, D1/D2).
 
 Files:
 - `prisma/schema.prisma`: `Post.expiresAt DateTime? @map("expires_at") @db.Timestamptz()` +
@@ -528,9 +594,8 @@ Acceptance criteria:
 - Unit tests (in-memory fake): approve sets expiry; renew happy/deny paths; reopen resets;
   sweep closes + notifies + idempotent; reminder dedupe.
 
-Verification: `pnpm test`; local migrate + manual: approve seed post, time-travel via SQL
-`UPDATE posts SET expires_at = now() - interval '1 hour'`, trigger worker once, observe closed
-status + notification.
+Verification: `pnpm test`; local migration via the sanctioned workaround (Hard constraint
+#4): `pnpm prisma db execute --file prisma/migrations/<ts>_add_post_expiry/migration.sql --schema prisma/schema.prisma && pnpm prisma migrate resolve --applied <ts>_add_post_expiry`; manual time-travel: approve seed post, `UPDATE posts SET expires_at = now() - interval '1 hour'`, trigger worker once, observe closed status + notification.
 
 Commit: `feat(posts): 60-day expiry with renewal, reminder notification and deactivation sweep (G-E)`
 
@@ -567,6 +632,15 @@ These require product/GDPR decisions before any ticket is written. Do NOT implem
   forms, schema, crypto layer. Needs Ramon's call; small ticket once decided.
 - **U-6 — moderator alert on new pending post.** No handwritten answer (decisions §17);
   optional `Notification` to moderators on `createPost`. Cheap ticket if wanted; needs a yes.
+- **U-7 / FR16 — missing `remove` moderation flow (NEW, rev 2).** FR16 promises
+  "approve, reject, or remove", but only approve/reject exist: `ModerationActionType.remove`
+  is a dead enum value (`schema.prisma:74`), there is no `removePost` service method, no
+  action, no UI, no delete call. Decisions §1.5 ("remove is a hard delete — matches") is
+  wrong about the code (divergence note 3). Decisions needed from Ramon: (a) is remove a
+  hard delete vs status change; (b) who may remove (moderator-any-post? admin-only?);
+  (c) what happens to the author's data / notifications / interested users (interacts with
+  the U-2 GDPR question); (d) does it get the author ≠ moderator conflict-of-interest guard
+  from T-G1-2. Until decided, the enum value stays dead — no ticket.
 
 ## Hard constraints (all waves)
 
@@ -580,8 +654,14 @@ These require product/GDPR decisions before any ticket is written. Do NOT implem
    locale, `User.uiLocale` default `pt-PT`).
 4. **Migrations:** schema.prisma is truth for columns Prisma understands; generated columns /
    trigram / unaccent stay raw SQL with the drop-recreate pattern of `20260718181500`;
-   enum-add follows `20260816000002`. There is NO CI DB today — every migration ticket must
-   show local `prisma migrate dev` evidence in the PR.
+   enum-add follows `20260816000002`. There is NO CI DB today — and **`prisma migrate dev`
+   is broken on this repo** (AGENTS.md:110: the historical `20260718192700` migration has
+   bare `CREATE INDEX` statements that collide on shadow-DB replay). Every migration ticket
+   verifies via the sanctioned workaround instead: `pnpm prisma db execute --file
+   <migration.sql> --schema prisma/schema.prisma` then `pnpm prisma migrate resolve
+   --applied <migration_name>`, with both outputs in the PR as evidence. (Fixing the
+   historical migration to restore `migrate dev` is out of scope for this plan; flag it as
+   a candidate follow-up ticket.)
 5. **Audit log on every new state transition** (`post.renew`, `post.expire`) — repo law.
 6. **RBAC defense-in-depth:** new actions (renew) check actor at service level; UI hides
    button for non-authors; page/action guards unchanged pattern.
@@ -601,7 +681,7 @@ These require product/GDPR decisions before any ticket is written. Do NOT implem
   page size 10 numbered pagination; approval-date on cards; signup→verify→publish flow;
   unverified user blocked from publish+interest; username uniqueness case-insensitive;
   my-posts renew button extends expiry; expired post auto-closes via worker sweep.
-- HOLD list (U-1..U-6) presented to Ramon with options; outcomes recorded as new tickets or
+- HOLD list (U-1..U-7) presented to Ramon with options; outcomes recorded as new tickets or
   explicit wont-do.
 - No HOLD item implemented without a decision.
 
