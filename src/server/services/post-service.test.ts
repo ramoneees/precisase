@@ -316,6 +316,63 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
     });
   });
 
+  describe("author ≠ moderator guard on approve/reject (G-C, QA §4)", () => {
+    it("throws UnauthorizedPostActionError when a moderator approves their own post", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "moderator-1" }));
+
+      await expect(
+        service.approvePost({ postId: "post-1", moderator: actor("moderator-1", "moderator") }),
+      ).rejects.toThrow(UnauthorizedPostActionError);
+      await expect(
+        service.approvePost({ postId: "post-1", moderator: actor("moderator-1", "moderator") }),
+      ).rejects.toThrow("Moderators cannot moderate their own posts.");
+
+      expect(repo.moderationActions).toHaveLength(0);
+      expect(repo.auditLogs).toHaveLength(0);
+      expect(repo.posts.get("post-1")?.status).toBe("pending");
+    });
+
+    it("throws UnauthorizedPostActionError when a moderator rejects their own post", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "moderator-1" }));
+
+      await expect(
+        service.rejectPost({
+          postId: "post-1",
+          moderator: actor("moderator-1", "moderator"),
+          reason: "my own post",
+        }),
+      ).rejects.toThrow(UnauthorizedPostActionError);
+
+      expect(repo.moderationActions).toHaveLength(0);
+      expect(repo.auditLogs).toHaveLength(0);
+      expect(repo.posts.get("post-1")?.status).toBe("pending");
+    });
+
+    it("allows a moderator to approve another author's post", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "author-1" }));
+
+      const result = await service.approvePost({
+        postId: "post-1",
+        moderator: actor("moderator-1", "moderator"),
+      });
+
+      expect(result.status).toBe("active");
+      expect(repo.moderationActions).toHaveLength(1);
+    });
+
+    it("blocks an admin authoring-moderator too", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "admin-1" }));
+
+      await expect(
+        service.approvePost({ postId: "post-1", moderator: actor("admin-1", "admin") }),
+      ).rejects.toThrow(UnauthorizedPostActionError);
+
+      expect(repo.moderationActions).toHaveLength(0);
+      expect(repo.auditLogs).toHaveLength(0);
+      expect(repo.posts.get("post-1")?.status).toBe("pending");
+    });
+  });
+
   describe("closePost — active -> closed (FR04, BR03)", () => {
     it("allows the author to close their own post", async () => {
       repo.seed(makePost({ status: "active" }));

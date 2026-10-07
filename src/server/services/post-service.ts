@@ -331,6 +331,20 @@ function isModerator(actor: Actor): boolean {
 }
 
 /**
+ * G-C conflict-of-interest guard (QA §4): a moderator/admin may never
+ * moderate their own post — approval, rejection, and removal (the future
+ * T-G2-5 removePostTx) all route through this same rule. Admin is NOT
+ * exempt.
+ */
+function ensureNotOwnPost(post: PostRecord, moderator: Actor): void {
+  if (moderator.id === post.authorId) {
+    throw new UnauthorizedPostActionError(
+      "Moderators cannot moderate their own posts.",
+    );
+  }
+}
+
+/**
  * Module-level equivalent of the previous `requirePost` instance method,
  * callable inside a `withTransaction` block against the tx-scoped repo
  * (passed as `repo`). Throws `PostNotFoundError` if the post is absent.
@@ -401,6 +415,8 @@ export class PostService {
       );
     }
 
+    ensureNotOwnPost(post, moderator);
+
     if (post.status !== "pending") {
       throw new InvalidPostTransitionError(post.status, "active");
     }
@@ -454,6 +470,8 @@ export class PostService {
         "Only a moderator or admin can reject a post.",
       );
     }
+
+    ensureNotOwnPost(post, moderator);
 
     if (post.status !== "pending") {
       throw new InvalidPostTransitionError(post.status, "rejected");
