@@ -558,7 +558,16 @@ export class PostService {
     return updated;
   }
 
-  /** closed -> active (FR05). Only the post's author may reopen it. */
+  /**
+   * closed -> active (FR05). Only the post's author may reopen it.
+   *
+   * Reopening skips re-moderation BY DESIGN: editing an active post never
+   * resets it to pending (decided behavior — see QA §7 in
+   * docs/QA-REVIEW-DECISIONS.md), so the post returns straight to the
+   * active listing without moderator re-approval. The original
+   * `publishedAt` is kept (ordering "com a primeira") and interests from
+   * the previous cycle are preserved.
+   */
   async reopenPost(input: ReopenPostInput): Promise<PostRecord> {
     return this.repo.withTransaction((tx) => this.reopenPostTx(tx, input));
   }
