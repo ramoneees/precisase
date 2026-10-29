@@ -263,18 +263,35 @@ export class PrismaPostRepository implements PostRepository {
       items = rows.map(toPostSummaryFromRaw);
     }
 
-    const total = await this.client.post.count({ where: {
-      status: "active" as const,
-      ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
-      ...(filter.type ? { type: filter.type } : {}),
-    } });
+    // Build the same conditions used by searchActivePostsViaFtsIndex so
+    // total/totalPages include the search condition when present, ensuring
+    // totals match results for any filter combination.
+    const countConditions: Prisma.Sql[] = [
+      Prisma.sql`status = 'active'::post_status`,
+    ];
+    if (filter.categoryId) {
+      countConditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
+    }
+    if (filter.type) {
+      countConditions.push(Prisma.sql`type = ${filter.type}::post_type`);
+    }
+    if (search) {
+      countConditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`);
+    }
+
+    const total = await this.client.$queryRaw<{ total: number }[]>`
+      SELECT COUNT(*) as total
+      FROM posts
+      WHERE ${Prisma.join(countConditions, " AND ")}
+    `;
+    const [{ total: countTotal }] = total;
 
     return {
       items,
       page,
       pageSize: limit,
-      total,
-      totalPages: Math.ceil(total / limit),
+      total: countTotal,
+      totalPages: Math.ceil(countTotal / limit),
     };
   }
 
