@@ -390,8 +390,10 @@ export class PrismaPostRepository implements PostRepository {
   ): Promise<PostSummary[]> {
     const conditions: Prisma.Sql[] = [
       Prisma.sql`status = 'active'::post_status`,
-      Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`,
     ];
+    if (search) {
+      conditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`);
+    }
     if (filter.categoryId) {
       conditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
     }
