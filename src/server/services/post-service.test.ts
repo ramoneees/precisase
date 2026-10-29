@@ -86,16 +86,22 @@ class InMemoryPostRepository implements PostRepository {
     return post;
   }
 
+  private getEffectiveDate(post: PostRecord): [Date | null, Date] {
+    // COALESCE(publishedAt, createdAt) for ordering, with createdAt as fallback
+    const effective = post.publishedAt ?? post.createdAt;
+    return [post.publishedAt, effective];
+  }
+
   async listActive(filter: {
     categoryId?: string;
     type?: PostRecord["type"];
     search?: string;
-    after?: string;
+    page?: number;
     limit?: number;
   }): Promise<PaginatedPosts> {
-    const limit = filter.limit ?? 24;
-    const cursorPost = filter.after ? this.posts.get(filter.after) : undefined;
-    const cursorDate = cursorPost?.createdAt;
+    const limit = Math.max(1, Math.min(filter.limit ?? DEFAULT_LISTING_PAGE_SIZE, 100));
+    const page = Math.max(1, filter.page ?? 1);
+    const skip = (page - 1) * limit;
 
     const filtered = [...this.posts.values()]
       .filter((post) => post.status === "active")
@@ -106,11 +112,35 @@ class InMemoryPostRepository implements PostRepository {
         const haystack = `${post.title} ${post.description}`.toLowerCase();
         return haystack.includes(filter.search.toLowerCase());
       })
-      .filter((post) => (cursorDate ? post.createdAt.getTime() < cursorDate.getTime() : true))
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      // Sort by effective publication date = COALESCE(publishedAt, createdAt) DESC
+      // createdAt desc breaks ties within the same effective date
+      // id desc as the final stable tie-break
+      .sort((a, b) => {
+        const [pa, ea] = this.getEffectiveDate(a);
+        const [pb, eb] = this.getEffectiveDate(b);
+        // Compare effective dates DESC
+        const cmp = eb.getTime() - ea.getTime();
+        if (cmp !== 0) return cmp;
+        // Tie-break by createdAt DESC
+        const createdCmp = b.createdAt.getTime() - a.createdAt.getTime();
+        if (createdCmp !== 0) return createdCmp;
+        // Final tie-break by id DESC
+        return b.id.localeCompare(a.id);
+      })
       .map(toSummary);
 
-    return paginateForTest(filtered, limit);
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const items = filtered.slice(start, end);
+
+    return {
+      items,
+      page,
+      pageSize: limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async listPending(): Promise<PostSummary[]> {

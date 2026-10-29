@@ -18,7 +18,7 @@ interface ListingSearchParams {
   category?: string;
   type?: string;
   q?: string;
-  after?: string;
+  page?: string;
 }
 
 function buildQuery(
@@ -30,7 +30,15 @@ function buildQuery(
   if (merged.category) query.category = merged.category;
   if (merged.type) query.type = merged.type;
   if (merged.q) query.q = merged.q;
+  if (merged.page !== undefined) query.page = merged.page;
   return { pathname: "/", query };
+}
+
+function buildPaginationQuery(
+  current: ListingSearchParams,
+  page: number,
+): { pathname: "/"; query: Record<string, string> } {
+  return buildQuery(current, { page: page.toString() });
 }
 
 export default async function HomePage({
@@ -64,17 +72,20 @@ export default async function HomePage({
     ? await findCategoryBySlug(selectedCategorySlug)
     : null;
 
+  const page = Math.max(1, Number(sp.page) || 1);
+
   const posts = await postService.listActivePosts({
     categoryId: selectedCategory?.id,
     type: selectedType,
     search,
-    after: sp.after,
+    page,
   });
-  const { nextCursor } = posts;
+
+  const { items, total, totalPages } = posts;
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
 
-  const authorIds = [...new Set(posts.items.map((post) => post.authorId))];
+  const authorIds = [...new Set(items.map((post) => post.authorId))];
   const authors = authorIds.length
     ? await prisma.user.findMany({
         where: { id: { in: authorIds } },
@@ -83,7 +94,8 @@ export default async function HomePage({
     : [];
   const authorNameById = new Map(authors.map((author) => [author.id, author.displayName]));
 
-  const cards: PostCardData[] = posts.items.map((post) => {
+  const cards: PostCardData[] = items.map((post) => {
+    const effectiveAt = post.publishedAt ?? post.createdAt;
     const category = categoryById.get(post.categoryId);
     const categoryKey = category?.key ?? "category.volunteering";
     const photos = getPostPhotos(post.extraAttributes);
@@ -101,6 +113,7 @@ export default async function HomePage({
       description: post.description,
       authorName: authorNameById.get(post.authorId) ?? "",
       createdAt: post.createdAt,
+      effectiveAt,
       photoUrl,
     };
   });
@@ -110,6 +123,32 @@ export default async function HomePage({
     type: selectedType,
     q: search,
   };
+
+  // Build numbered pagination controls
+  const pages: number[] = [];
+  const totalPagesNum = totalPages || 1;
+
+  if (totalPagesNum <= 3) {
+    // Show all pages when few enough
+    for (let i = 1; i <= totalPagesNum; i++) {
+      pages.push(i);
+    }
+  } else {
+    // Show first, ellipsis, middle, ellipsis, last
+    pages.push(1);
+    if (page > 3) {
+      pages.push(-1); // ellipsis marker
+    }
+    const start = Math.max(2, page - 1);
+    const end = Math.min(totalPagesNum - 1, page + 1);
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (page < totalPagesNum - 2) {
+      pages.push(-1); // ellipsis marker
+    }
+    pages.push(totalPagesNum);
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-8 px-6 py-10">
@@ -191,7 +230,7 @@ export default async function HomePage({
       )}
 
       <p className="text-sm text-[#6B7268]">
-        {t("resultsCount", { count: cards.length })}
+        {t("resultsCount", { count: total })}
       </p>
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
@@ -202,14 +241,98 @@ export default async function HomePage({
         )}
       </div>
 
-      {nextCursor ? (
-        <Link
-          href={buildQuery(currentParams, { after: nextCursor })}
-          className="mx-auto rounded-full border border-[#E3DED2] bg-white px-6 py-2.5 text-sm font-medium text-[#2F6B4F] hover:border-[#2F6B4F]"
-        >
-          {t("loadMore")}
-        </Link>
-      ) : null}
+      <nav className="mt-6" aria-label="Pagination">
+        <ul className="flex justify-between items-center">
+          {/* Prev button */}
+          {page > 1 ? (
+            <li>
+              <Link
+                href={buildPaginationQuery(currentParams, page - 1)}
+                className="rounded-full border border-[#E3DED2] bg-white px-3 py-1.5 text-sm text-[#2F6B4F] hover:border-[#2F6B4F]"
+                aria-label={t("pagination.prev")}
+              >
+                {t("pagination.prev")}
+              </Link>
+            </li>
+          ) : (
+            <li>
+              <span className="rounded-full border border-[#E3DED2] bg-white px-3 py-1.5 text-sm text-[#9AA098]">
+                {t("pagination.prev")}
+              </span>
+            </li>
+          )}
+
+{/* Page numbers */}
+          {(() => {
+            const pagesNum: number[] = [];
+            const totalPagesNum = totalPages || 1;
+
+            if (totalPagesNum <= 3) {
+              for (let i = 1; i <= totalPagesNum; i++) {
+                pagesNum.push(i);
+              }
+            } else {
+              pagesNum.push(1);
+              if (page > 3) {
+                pagesNum.push(-1);
+              }
+              const start = Math.max(2, page - 1);
+              const end = Math.min(totalPagesNum - 1, page + 1);
+              for (let i = start; i <= end; i++) {
+                pagesNum.push(i);
+              }
+              if (page < totalPagesNum - 2) {
+                pagesNum.push(-1);
+              }
+              pagesNum.push(totalPagesNum);
+            }
+
+            return pagesNum.map((p) => {
+              if (p === -1) {
+                return (
+                  <li key="ellipsis">
+                    <span className="rounded-full border border-[#E3DED2] bg-white px-3 py-1.5 text-sm text-[#9AA098]">
+                      …
+                    </span>
+                  </li>
+                );
+              }
+              return (
+                <li
+                  key={p}
+                  className={
+                    p === page
+                      ? "rounded-full bg-[#2F6B4F] px-3 py-1.5 text-sm font-medium text-white"
+                      : "rounded-full border border-[#E3DED2] bg-white px-3 py-1.5 text-sm text-[#232922] hover:border-[#2F6B4F]"
+                  }
+                >
+                  <Link href={buildPaginationQuery(currentParams, p)}>
+                    {p}
+                  </Link>
+                </li>
+              );
+            });
+          })()}
+          {/* Next button */}
+          {page < totalPagesNum ? (
+            <li>
+              <Link
+                href={buildPaginationQuery(currentParams, page + 1)}
+                className="rounded-full border border-[#E3DED2] bg-white px-3 py-1.5 text-sm text-[#2F6B4F] hover:border-[#2F6B4F]"
+                aria-label={t("pagination.next")}
+              >
+                {t("pagination.next")}
+              </Link>
+            </li>
+          ) : (
+            <li>
+              <span className="rounded-full border border-[#E3DED2] bg-white px-3 py-1.5 text-sm text-[#9AA098]">
+                {t("pagination.next")}
+              </span>
+            </li>
+          )}
+        </ul>
+      </nav>
     </main>
   );
 }

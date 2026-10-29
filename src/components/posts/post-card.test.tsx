@@ -27,6 +27,7 @@ function makeCard(overrides: Partial<PostCardData> = {}): PostCardData {
       "Preciso de duas ou três pessoas disponíveis no sábado de manhã para ajudar a transportar um sofá.",
     authorName: "Ana Silva",
     createdAt: new Date("2026-06-01T10:00:00Z"),
+    effectiveAt: new Date("2026-06-01T10:00:00Z"),
     photoUrl: "data:image/svg+xml,%3Csvg%3E%3C/svg%3E",
     ...overrides,
   };

@@ -114,20 +114,6 @@ function toPostSummaryFromRaw(row: RawPostSummaryRow): PostSummary {
 }
 
 /**
- * Splits a fetched-`limit+1` row list into the page (`items`) plus a
- * `nextCursor` pointing at the next page's start (the (limit+1)th row's
- * id). Returns `nextCursor: null` when fewer than `limit+1` rows were
- * returned, signaling end-of-list to the caller.
- */
-function paginate(rows: PostSummary[], limit: number): PaginatedPosts {
-  if (rows.length <= limit) {
-    return { items: rows, nextCursor: null };
-  }
-  const page = rows.slice(0, limit);
-  return { items: page, nextCursor: page[page.length - 1]!.id };
-}
-
-/**
  * Maps a Prisma `Post` row to the plaintext `PostRecord` domain type —
  * decrypting `contactValue` is the one thing this function does that a
  * generic "select all columns" mapper wouldn't.
@@ -265,26 +251,48 @@ export class PrismaPostRepository implements PostRepository {
   async listActive(filter: ListActivePostsFilter): Promise<PaginatedPosts> {
     const search = filter.search?.trim();
     const limit = Math.max(1, Math.min(filter.limit ?? DEFAULT_LISTING_PAGE_SIZE, 100));
-    const cursorDate = filter.after ? await this.cursorCreatedAt(filter.after) : null;
+    const page = Math.max(1, filter.page ?? 1);
+    const skip = (page - 1) * limit;
 
-    if (!search) {
+    const where = {
+      status: "active" as const,
+      ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
+      ...(filter.type ? { type: filter.type } : {}),
+    };
+
+    let items: PostSummary[];
+    if (search) {
+      const rows = await this.searchActivePostsViaFtsIndex(filter, search, limit, skip);
+      items = rows.map(toPostSummaryFromRaw);
+    } else {
       const rows = await this.client.post.findMany({
-        where: {
-          status: "active",
-          ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
-          ...(filter.type ? { type: filter.type } : {}),
-          ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
-        },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        take: limit + 1,
+        where,
+        // Effective publication date = COALESCE(publishedAt, createdAt)
+        // (legacy rows predate approval timestamps, so createdAt is the
+        // fallback). `nulls: "last"` keeps legacy rows behind approved ones;
+        // createdAt desc breaks ties within the same effective date, id desc
+        // as the final stable tie-break.
+        orderBy: [
+          { publishedAt: { sort: "desc", nulls: "last" } },
+          { createdAt: "desc" },
+          { id: "desc" },
+        ],
+        skip,
+        take: limit,
         select: POST_SUMMARY_SELECT,
       });
-
-      return paginate(rows.map(toPostSummary), limit);
+      items = rows.map(toPostSummary);
     }
 
-    const searchRows = await this.searchActivePostsViaFtsIndex(filter, search, limit, cursorDate);
-    return paginate(searchRows, limit);
+    const total = await this.client.post.count({ where });
+
+    return {
+      items,
+      page,
+      pageSize: limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async listByAuthor(authorId: string): Promise<PostSummary[]> {
@@ -353,21 +361,8 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   /**
-   * Instance-method mirror of the module-level `cursorCreatedAt` helper
-   * — uses the (possibly tx-scoped) client so cursor lookups inside a
-   * transaction read from the transaction snapshot.
-   */
-  private async cursorCreatedAt(postId: string): Promise<Date | null> {
-    const row = await this.client.post.findUnique({
-      where: { id: postId },
-      select: { createdAt: true },
-    });
-    return row?.createdAt ?? null;
-  }
-
-  /**
    * Instance-method mirror of the module-level FTS search helper — same
-   * tx-snapshot rationale as `cursorCreatedAt`.
+   * tx-snapshot rationale as the old `cursorCreatedAt`.
    *
    * NOTE: the `$queryRaw` call does not bind to the tx client even when
    * invoked on `this.client`; this is acceptable because listActive is a
@@ -378,7 +373,7 @@ export class PrismaPostRepository implements PostRepository {
     filter: ListActivePostsFilter,
     search: string,
     limit: number,
-    cursorDate: Date | null,
+    skip: number,
   ): Promise<PostSummary[]> {
     const conditions: Prisma.Sql[] = [
       Prisma.sql`status = 'active'::post_status`,
@@ -389,9 +384,6 @@ export class PrismaPostRepository implements PostRepository {
     }
     if (filter.type) {
       conditions.push(Prisma.sql`type = ${filter.type}::post_type`);
-    }
-    if (cursorDate) {
-      conditions.push(Prisma.sql`created_at < ${cursorDate}`);
     }
 
     const rows = await this.client.$queryRaw<RawPostSummaryRow[]>`
@@ -412,8 +404,8 @@ export class PrismaPostRepository implements PostRepository {
         updated_at    AS "updatedAt"
       FROM posts
       WHERE ${Prisma.join(conditions, " AND ")}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ${limit + 1}
+      ORDER BY COALESCE(published_at, created_at) DESC, id DESC
+      LIMIT ${limit} OFFSET ${skip}
     `;
 
     return rows.map(toPostSummaryFromRaw);

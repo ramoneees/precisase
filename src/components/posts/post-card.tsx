@@ -15,6 +15,8 @@ export interface PostCardData {
   description: string;
   authorName: string;
   createdAt: Date;
+  /** Effective date = publishedAt fallback createdAt, for the COALESCE ordering. */
+  effectiveAt: Date;
   /** Real photo URL or a `placeholderPhoto(...)` data URI — always set. */
   photoUrl: string;
 }
@@ -65,6 +67,13 @@ export function PostCard({ post }: { post: PostCardData }) {
           <span className="truncate">{post.authorName}</span>
           <span className="shrink-0">
             {format.dateTime(post.createdAt, {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })}
+          </span>
+          <span className="text-[var(--muted)]">
+            {format.dateTime(post.effectiveAt, {
               day: "2-digit",
               month: "2-digit",
               year: "numeric",
