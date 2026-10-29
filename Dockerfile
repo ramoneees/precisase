@@ -51,6 +51,9 @@ COPY . .
 # No secrets are needed at build time for the MVP; NEXT_PUBLIC_* build args
 # can be added here later without changing this stage's shape.
 ENV NEXT_TELEMETRY_DISABLED=1
+# Generated client is gitignored, so COPY . . doesn't ship it — build it here.
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm exec prisma generate
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm build
 
