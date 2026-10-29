@@ -7,6 +7,7 @@ import {
   PostNotFoundError,
   PostService,
   UnauthorizedPostActionError,
+  DEFAULT_LISTING_PAGE_SIZE,
   normalizeContactValue,
   type Actor,
   type ActorRole,
@@ -697,7 +698,10 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       const result = await service.listActivePosts({ categoryId: "category-1" });
 
       expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
-      expect(result.nextCursor).toBeNull();
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(DEFAULT_LISTING_PAGE_SIZE);
+      expect(result.total).toBe(1);
+      expect(result.totalPages).toBe(1);
     });
 
     it("passes filter (category, type, search) through to the repository", async () => {
@@ -717,7 +721,89 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
     });
 
-    it("paginates: returns nextCursor when more rows exist past `limit`", async () => {
+    it("orders by effective publication date (publishedAt desc, createdAt fallback for legacy rows)", async () => {
+      repo.seed(
+        makePost({
+          id: "post-1",
+          status: "active",
+          publishedAt: new Date("2026-01-05T00:00:00Z"),
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+        }),
+      );
+      repo.seed(
+        makePost({
+          id: "post-2",
+          status: "active",
+          publishedAt: null,
+          createdAt: new Date("2026-01-03T00:00:00Z"),
+        }),
+      );
+      repo.seed(
+        makePost({
+          id: "post-3",
+          status: "active",
+          publishedAt: new Date("2026-01-04T00:00:00Z"),
+          createdAt: new Date("2026-01-02T00:00:00Z"),
+        }),
+      );
+
+      const result = await service.listActivePosts({});
+
+      expect(result.items.map((p) => p.id)).toEqual(["post-1", "post-3", "post-2"]);
+    });
+
+    it("defaults to a page size of 10 and never exceeds one page of items", async () => {
+      for (let i = 1; i <= 11; i++) {
+        repo.seed(
+          makePost({
+            id: `post-${i}`,
+            status: "active",
+            createdAt: new Date(Date.UTC(2026, 0, i)),
+          }),
+        );
+      }
+
+      const result = await service.listActivePosts({});
+
+      expect(result.items).toHaveLength(DEFAULT_LISTING_PAGE_SIZE);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(DEFAULT_LISTING_PAGE_SIZE);
+      expect(result.total).toBe(11);
+      expect(result.totalPages).toBe(2);
+    });
+
+    it("computes numbered pagination totals (25 items -> 3 pages, page 2 has 10)", async () => {
+      for (let i = 0; i < 25; i++) {
+        repo.seed(
+          makePost({
+            id: `post-${i + 1}`,
+            status: "active",
+            createdAt: new Date(Date.UTC(2026, 0, i + 1)),
+          }),
+        );
+      }
+
+      const page1 = await service.listActivePosts({ page: 1, limit: DEFAULT_LISTING_PAGE_SIZE });
+      expect(page1.items).toHaveLength(10);
+      expect(page1.page).toBe(1);
+      expect(page1.pageSize).toBe(DEFAULT_LISTING_PAGE_SIZE);
+      expect(page1.total).toBe(25);
+      expect(page1.totalPages).toBe(3);
+
+      const page2 = await service.listActivePosts({ page: 2, limit: DEFAULT_LISTING_PAGE_SIZE });
+      expect(page2.items).toHaveLength(10);
+      expect(page2.page).toBe(2);
+      expect(page2.total).toBe(25);
+      expect(page2.totalPages).toBe(3);
+
+      const page3 = await service.listActivePosts({ page: 3, limit: DEFAULT_LISTING_PAGE_SIZE });
+      expect(page3.items).toHaveLength(5);
+      expect(page3.page).toBe(3);
+      expect(page3.total).toBe(25);
+      expect(page3.totalPages).toBe(3);
+    });
+
+    it("paginates: numbered pages slice the ordered list (limit 2 -> pages of 2)", async () => {
       for (let i = 0; i < 5; i++) {
         repo.seed(
           makePost({
@@ -728,17 +814,24 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
         );
       }
 
-      const page1 = await service.listActivePosts({ limit: 2 });
+      const page1 = await service.listActivePosts({ page: 1, limit: 2 });
       expect(page1.items.map((p) => p.id)).toEqual(["post-5", "post-4"]);
-      expect(page1.nextCursor).toBe("post-4");
+      expect(page1.page).toBe(1);
+      expect(page1.pageSize).toBe(2);
+      expect(page1.total).toBe(5);
+      expect(page1.totalPages).toBe(3);
 
-      const page2 = await service.listActivePosts({ limit: 2, after: page1.nextCursor! });
+      const page2 = await service.listActivePosts({ page: 2, limit: 2 });
       expect(page2.items.map((p) => p.id)).toEqual(["post-3", "post-2"]);
-      expect(page2.nextCursor).toBe("post-2");
+      expect(page2.page).toBe(2);
+      expect(page2.total).toBe(5);
+      expect(page2.totalPages).toBe(3);
 
-      const page3 = await service.listActivePosts({ limit: 2, after: page2.nextCursor! });
+      const page3 = await service.listActivePosts({ page: 3, limit: 2 });
       expect(page3.items.map((p) => p.id)).toEqual(["post-1"]);
-      expect(page3.nextCursor).toBeNull();
+      expect(page3.page).toBe(3);
+      expect(page3.total).toBe(5);
+      expect(page3.totalPages).toBe(3);
     });
   });
 
