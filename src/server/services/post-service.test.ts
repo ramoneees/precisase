@@ -782,6 +782,34 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       expect(result.items.map((p) => p.id)).toEqual(["post-1", "post-3", "post-2"]);
     });
 
+    it("legacy row with null publishedAt but newer createdAt ranks above approved row with earlier publishedAt (COALESCE semantics)", async () => {
+      // Legacy row: publishedAt=null, createdAt=2026-01-06 → effective date = 2026-01-06
+      // Approved row: publishedAt=2026-01-05, createdAt=2026-01-01 → effective date = 2026-01-05
+      // With COALESCE DESC: legacy (2026-01-06) comes FIRST
+      // With nulls:last DESC: approved (2026-01-05) comes FIRST (bug)
+      repo.seed(
+        makePost({
+          id: "post-legacy",
+          status: "active",
+          publishedAt: null,
+          createdAt: new Date("2026-01-06T00:00:00Z"),
+        }),
+      );
+      repo.seed(
+        makePost({
+          id: "post-approved",
+          status: "active",
+          publishedAt: new Date("2026-01-05T00:00:00Z"),
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+        }),
+      );
+
+      const result = await service.listActivePosts({});
+
+      // Legacy row must come first because COALESCE(publishedAt, createdAt) = 2026-01-06 > 2026-01-05
+      expect(result.items.map((p) => p.id)).toEqual(["post-legacy", "post-approved"]);
+    });
+
     it("defaults to a page size of 10 and never exceeds one page of items", async () => {
       for (let i = 1; i <= 11; i++) {
         repo.seed(

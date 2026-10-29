@@ -254,37 +254,20 @@ export class PrismaPostRepository implements PostRepository {
     const page = Math.max(1, filter.page ?? 1);
     const skip = (page - 1) * limit;
 
-    const where = {
-      status: "active" as const,
-      ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
-      ...(filter.type ? { type: filter.type } : {}),
-    };
-
     let items: PostSummary[];
     if (search) {
       const rows = await this.searchActivePostsViaFtsIndex(filter, search, limit, skip);
       items = rows.map(toPostSummaryFromRaw);
     } else {
-      const rows = await this.client.post.findMany({
-        where,
-        // Effective publication date = COALESCE(publishedAt, createdAt)
-        // (legacy rows predate approval timestamps, so createdAt is the
-        // fallback). `nulls: "last"` keeps legacy rows behind approved ones;
-        // createdAt desc breaks ties within the same effective date, id desc
-        // as the final stable tie-break.
-        orderBy: [
-          { publishedAt: { sort: "desc", nulls: "last" } },
-          { createdAt: "desc" },
-          { id: "desc" },
-        ],
-        skip,
-        take: limit,
-        select: POST_SUMMARY_SELECT,
-      });
-      items = rows.map(toPostSummary);
+      const rows = await this.searchActivePostsViaFtsIndex(filter, undefined, limit, skip);
+      items = rows.map(toPostSummaryFromRaw);
     }
 
-    const total = await this.client.post.count({ where });
+    const total = await this.client.post.count({ where: {
+      status: "active" as const,
+      ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
+      ...(filter.type ? { type: filter.type } : {}),
+    } });
 
     return {
       items,
@@ -368,12 +351,25 @@ export class PrismaPostRepository implements PostRepository {
    * invoked on `this.client`; this is acceptable because listActive is a
    * read-only listing query, never invoked from inside a state-transition
    * transaction. If that changes, the query must move to `tx.$queryRaw`.
+   *
+   * Generalized so the `search_vector` condition is optional: when called
+   * without a search string it returns all active posts ordered by
+   * `COALESCE(published_at, created_at) DESC, id DESC` — usable for both
+   * the FTS search path and the plain listing path, guaranteeing ordering
+   * equivalence between the two.
+   *
+   * The raw SQL `ORDER BY COALESCE(published_at, created_at) DESC, id DESC`
+   * is the source of truth for ordering equivalence. Prisma's typed
+   * `orderBy` cannot express `COALESCE`; the `nulls: "last"` approach was
+   * therefore semantically different (legacy rows with `publishedAt=null`
+   * fall *after* approved rows instead of *before*). This comment documents
+   * the discrepancy for future maintainers.
    */
   private async searchActivePostsViaFtsIndex(
     filter: ListActivePostsFilter,
-    search: string,
-    limit: number,
-    skip: number,
+    search?: string,
+    limit: number = DEFAULT_LISTING_PAGE_SIZE,
+    skip: number = 0,
   ): Promise<PostSummary[]> {
     const conditions: Prisma.Sql[] = [
       Prisma.sql`status = 'active'::post_status`,
