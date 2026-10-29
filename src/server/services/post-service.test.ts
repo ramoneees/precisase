@@ -195,14 +195,6 @@ function toSummary(post: PostRecord): PostSummary {
   return summary;
 }
 
-function paginateForTest(rows: PostSummary[], limit: number): PaginatedPosts {
-  if (rows.length <= limit) {
-    return { items: rows, nextCursor: null };
-  }
-  const page = rows.slice(0, limit);
-  return { items: page, nextCursor: page[page.length - 1]!.id };
-}
-
 function makePost(overrides: Partial<PostRecord> = {}): PostRecord {
   return {
     id: "post-1",

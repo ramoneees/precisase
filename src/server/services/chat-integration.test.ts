@@ -296,8 +296,19 @@ class InMemoryPostRepository implements PostRepository {
 
   async listActive(filter: ListActivePostsFilter): Promise<PaginatedPosts> {
     const rows = [...this.posts.values()].filter((p) => p.status === "active");
-    const limit = filter.limit ?? 24;
-    return { items: rows.slice(0, limit), nextCursor: null };
+    const limit = Math.max(1, Math.min(filter.limit ?? 10, 100));
+    const page = Math.max(1, filter.page ?? 1);
+    const skip = (page - 1) * limit;
+    const total = rows.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    return {
+      items: rows.slice(start, end),
+      page,
+      pageSize: limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async listByAuthor(authorId: string): Promise<PostSummary[]> {
