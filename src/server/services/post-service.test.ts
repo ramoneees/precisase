@@ -734,8 +734,8 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
     });
 
-    it('finds accented content via accented query ("Ação" → "acao")', async () => {
-      repo.seed(makePost({ id: "post-1", status: "active", title: "Ação" }));
+    it('finds unaccented content via accented query ("Ação" → "Acao")', async () => {
+      repo.seed(makePost({ id: "post-1", status: "active", title: "Acao" }));
 
       const result = await service.listActivePosts({ search: "Ação" });
 
