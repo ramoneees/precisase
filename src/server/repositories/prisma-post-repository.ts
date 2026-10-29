@@ -9,6 +9,7 @@
 
 import { Prisma, type Post as PrismaPost } from "@/generated/prisma/client";
 import { PrismaClient } from "@/generated/prisma/client";
+import { normalizeSearchText } from "@/lib/normalize-search-text";
 import { decrypt, encrypt } from "@/server/crypto/contact-encryption";
 import type {
   AuditLogRecord,
@@ -382,7 +383,7 @@ export class PrismaPostRepository implements PostRepository {
   ): Promise<PostSummary[]> {
     const conditions: Prisma.Sql[] = [
       Prisma.sql`status = 'active'::post_status`,
-      Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`,
+      Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), posts_unaccent(${normalizeSearchText(search)}))`,
     ];
     if (filter.categoryId) {
       conditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
