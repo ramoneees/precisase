@@ -149,6 +149,7 @@ async function toPostRecord(post: PrismaPost): Promise<PostRecord> {
     extraAttributes: (post.extraAttributes as Record<string, unknown> | null) ?? {},
     publishedAt: post.publishedAt,
     closedAt: post.closedAt,
+    deletedAt: post.deletedAt,
     rejectedReason: post.rejectedReason,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
@@ -271,6 +272,7 @@ export class PrismaPostRepository implements PostRepository {
       const rows = await this.client.post.findMany({
         where: {
           status: "active",
+          deletedAt: null,
           ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
           ...(filter.type ? { type: filter.type } : {}),
           ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
@@ -299,7 +301,7 @@ export class PrismaPostRepository implements PostRepository {
 
   async listPending(): Promise<PostSummary[]> {
     const posts = await this.client.post.findMany({
-      where: { status: "pending" },
+      where: { status: "pending", deletedAt: null },
       orderBy: { createdAt: "asc" },
       select: POST_SUMMARY_SELECT,
     });
@@ -382,6 +384,7 @@ export class PrismaPostRepository implements PostRepository {
   ): Promise<PostSummary[]> {
     const conditions: Prisma.Sql[] = [
       Prisma.sql`status = 'active'::post_status`,
+      Prisma.sql`deleted_at IS NULL`,
       Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`,
     ];
     if (filter.categoryId) {
