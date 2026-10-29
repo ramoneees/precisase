@@ -112,6 +112,7 @@
       "submit": "Submit for approval",
       "submitting": "Submitting…",
       "toastSuccess": "Post submitted for approval.",
+      "unsavedChangesWarning": "You have unsaved changes. If you leave now, you'll lose them. Do you want to continue?",
       "errors": {
         "invalidInput": "Please check the fields and try again.",
         "uploadInvalidType": "Only JPEG, PNG or WebP images are accepted.",
@@ -161,6 +162,7 @@
       "activeSubmit": "Save changes",
       "activeSubmitting": "Saving…",
       "activeToastSuccess": "Post updated.",
+      "unsavedChangesWarning": "You have unsaved changes. If you leave now, you'll lose them. Do you want to continue?",
       "errors": {
         "invalidInput": "Please check the fields and try again.",
         "unauthorized": "You don't have permission to edit this post.",

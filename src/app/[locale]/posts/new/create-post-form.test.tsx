@@ -1,11 +1,29 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ptPT from "../../../../../messages/pt-PT.json";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { CreatePostForm } from "./create-post-form";
 import { createPostAction } from "./actions";
+
+const UNSAVED_WARNING = ptPT.post.createForm.unsavedChangesWarning;
+
+function dispatchBeforeUnload() {
+  const event = new Event("beforeunload", { cancelable: true }) as BeforeUnloadEvent;
+  window.dispatchEvent(event);
+  return event;
+}
+
+function clickInternalLink(href: string) {
+  const anchor = document.createElement("a");
+  anchor.setAttribute("href", href);
+  document.body.appendChild(anchor);
+  const event = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+  anchor.dispatchEvent(event);
+  document.body.removeChild(anchor);
+  return event;
+}
 
 /**
  * The `createPostAction` Server Action does real Prisma work, so it's
@@ -46,6 +64,11 @@ describe("CreatePostForm submit-disabled logic", () => {
   beforeEach(() => {
     vi.mocked(createPostAction).mockReset();
     pushMock.mockReset();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("disables the submit button until title, description, contact value, and consent are all filled", async () => {
@@ -120,5 +143,67 @@ describe("CreatePostForm submit-disabled logic", () => {
         consent: true,
       }),
     );
+  });
+});
+
+describe("CreatePostForm unsaved-changes guard", () => {
+  beforeEach(() => {
+    vi.mocked(createPostAction).mockReset();
+    pushMock.mockReset();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("does not warn before the user modifies anything", () => {
+    renderForm();
+
+    const unloadEvent = dispatchBeforeUnload();
+    expect(unloadEvent.defaultPrevented).toBe(false);
+
+    const clickEvent = clickInternalLink("/my-posts");
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(clickEvent.defaultPrevented).toBe(false);
+  });
+
+  it("warns on beforeunload and in-app link navigation once a field is dirty", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText(ptPT.post.createForm.titleLabel), "Preciso de voluntários");
+
+    const unloadEvent = dispatchBeforeUnload();
+    expect(unloadEvent.defaultPrevented).toBe(true);
+
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const clickEvent = clickInternalLink("/my-posts");
+    expect(window.confirm).toHaveBeenCalledWith(UNSAVED_WARNING);
+    expect(clickEvent.defaultPrevented).toBe(true);
+  });
+
+  it("deactivates the guard after a successful submit", async () => {
+    vi.mocked(createPostAction).mockResolvedValue({ ok: true, postId: "post-1" });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText(ptPT.post.createForm.titleLabel), "Preciso de voluntários");
+    await user.type(
+      screen.getByLabelText(ptPT.post.createForm.descriptionLabel),
+      "Descrição detalhada do pedido.",
+    );
+    await user.type(screen.getByLabelText(ptPT.post.createForm.contactValueLabel), "912 345 678");
+    await user.click(screen.getByLabelText(ptPT.post.createForm.consentLabel));
+    await user.click(screen.getByRole("button", { name: ptPT.post.createForm.submit }));
+
+    await vi.waitFor(() => expect(createPostAction).toHaveBeenCalledTimes(1));
+
+    const unloadEvent = dispatchBeforeUnload();
+    await vi.waitFor(() => expect(unloadEvent.defaultPrevented).toBe(false));
+
+    const clickEvent = clickInternalLink("/my-posts");
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(clickEvent.defaultPrevented).toBe(false);
   });
 });

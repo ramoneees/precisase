@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { colors } from "@/lib/design-tokens";
+import { useUnsavedChangesGuard } from "@/lib/use-unsaved-changes-guard";
 import type { CategoryLite } from "@/server/categories";
 import type {
   ContactMethodValue,
@@ -51,9 +52,8 @@ export function CreatePostForm({
   const [isPending, startTransition] = useTransition();
 
   const [type, setType] = useState<PostTypeValue>("request");
-  const [categorySlug, setCategorySlug] = useState<string>(
-    categories[0]?.slug ?? "volunteering",
-  );
+  const initialCategorySlug = categories[0]?.slug ?? "volunteering";
+  const [categorySlug, setCategorySlug] = useState<string>(initialCategorySlug);
   const [photos, setPhotos] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<UploadErrorCode | null>(null);
@@ -68,6 +68,20 @@ export function CreatePostForm({
   const [employmentType, setEmploymentType] = useState("");
   const [salaryRange, setSalaryRange] = useState("");
   const [jobLocation, setJobLocation] = useState("");
+
+  const isDirty =
+    type !== "request" ||
+    categorySlug !== initialCategorySlug ||
+    photos.length > 0 ||
+    title !== "" ||
+    description !== "" ||
+    contactMethod !== "whatsapp" ||
+    contactValue !== "" ||
+    consent ||
+    employmentType !== "" ||
+    salaryRange !== "" ||
+    jobLocation !== "";
+  useUnsavedChangesGuard(isDirty, t("unsavedChangesWarning"));
 
   const canSubmit =
     title.trim().length > 0 &&
@@ -155,6 +169,19 @@ export function CreatePostForm({
         setError(result.error);
         return;
       }
+
+      // Reset to pristine defaults so the dirty guard deactivates before navigating away.
+      setPhotos([]);
+      setTitle("");
+      setDescription("");
+      setContactValue("");
+      setConsent(false);
+      setEmploymentType("");
+      setSalaryRange("");
+      setJobLocation("");
+      setType("request");
+      setCategorySlug(initialCategorySlug);
+      setContactMethod("whatsapp");
 
       showToast(t("toastSuccess"));
       router.push("/my-posts");
