@@ -124,32 +124,6 @@ export default async function HomePage({
     q: search,
   };
 
-  // Build numbered pagination controls
-  const pages: number[] = [];
-  const totalPagesNum = totalPages || 1;
-
-  if (totalPagesNum <= 3) {
-    // Show all pages when few enough
-    for (let i = 1; i <= totalPagesNum; i++) {
-      pages.push(i);
-    }
-  } else {
-    // Show first, ellipsis, middle, ellipsis, last
-    pages.push(1);
-    if (page > 3) {
-      pages.push(-1); // ellipsis marker
-    }
-    const start = Math.max(2, page - 1);
-    const end = Math.min(totalPagesNum - 1, page + 1);
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    if (page < totalPagesNum - 2) {
-      pages.push(-1); // ellipsis marker
-    }
-    pages.push(totalPagesNum);
-  }
-
   return (
     <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-8 px-6 py-10">
       <div className="flex flex-col gap-2">
@@ -265,10 +239,8 @@ export default async function HomePage({
 {/* Page numbers */}
           {(() => {
             const pagesNum: number[] = [];
-            const totalPagesNum = totalPages || 1;
-
-            if (totalPagesNum <= 3) {
-              for (let i = 1; i <= totalPagesNum; i++) {
+                        if (totalPages <= 3) {
+              for (let i = 1; i <= totalPages; i++) {
                 pagesNum.push(i);
               }
             } else {
@@ -277,19 +249,19 @@ export default async function HomePage({
                 pagesNum.push(-1);
               }
               const start = Math.max(2, page - 1);
-              const end = Math.min(totalPagesNum - 1, page + 1);
+              const end = Math.min(totalPages - 1, page + 1);
               for (let i = start; i <= end; i++) {
                 pagesNum.push(i);
               }
-              if (page < totalPagesNum - 2) {
+              if (page < totalPages - 2) {
                 pagesNum.push(-1);
               }
-              pagesNum.push(totalPagesNum);
+              pagesNum.push(totalPages);
             }
 
             return pagesNum.map((p) => {
               if (p === -1) {
-                return (
+              return (
                   <li key="ellipsis">
                     <span className="rounded-full border border-[#E3DED2] bg-white px-3 py-1.5 text-sm text-[#9AA098]">
                       …
@@ -297,7 +269,13 @@ export default async function HomePage({
                   </li>
                 );
               }
-              return (
+            const currentParams: ListingSearchParams = {
+    category: selectedCategorySlug,
+    type: selectedType,
+    q: search,
+  };
+
+  return (
                 <li
                   key={p}
                   className={
@@ -314,7 +292,7 @@ export default async function HomePage({
             });
           })()}
           {/* Next button */}
-          {page < totalPagesNum ? (
+          {page < totalPages ? (
             <li>
               <Link
                 href={buildPaginationQuery(currentParams, page + 1)}
