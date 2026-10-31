@@ -73,6 +73,9 @@ export interface PostRecord {
   extraAttributes: Record<string, unknown>;
   publishedAt: Date | null;
   closedAt: Date | null;
+  /** FR16 soft delete (D12) — set by a moderator's `removePost`; null when
+   * the post has not been removed. */
+  deletedAt: Date | null;
   rejectedReason: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -89,7 +92,7 @@ export interface PostRecord {
  * it. Returning `PostSummary` from list methods makes that path
  * structurally impossible.
  */
-export type PostSummary = Omit<PostRecord, "contactMethod" | "contactValue">;
+export type PostSummary = Omit<PostRecord, "contactMethod" | "contactValue" | "deletedAt">;
 
 export interface ModerationActionRecord {
   postId: string;
@@ -101,7 +104,7 @@ export interface ModerationActionRecord {
 export interface NotificationRecord {
   recipientId: string;
   postId?: string | null;
-  type: "interest_received" | "post_approved" | "post_rejected" | "post_closed";
+  type: "interest_received" | "post_approved" | "post_rejected" | "post_closed" | "post_removed";
   channel: "email" | "in_app";
   payload: Record<string, unknown>;
 }
@@ -131,6 +134,7 @@ export type CreatePostData = Omit<
   | "createdAt"
   | "updatedAt"
   | "extraAttributes"
+  | "deletedAt"
 > & { extraAttributes?: Record<string, unknown> };
 
 /** Filter accepted by the shop-window listing query (FR06–FR08). */
@@ -272,6 +276,19 @@ export interface ApprovePostInput {
 }
 
 export interface RejectPostInput {
+  postId: string;
+  moderator: Actor;
+  reason: string;
+}
+
+/** FR16 soft delete (D12): a moderator removes a post by setting ,
+ * recording a  of type , and queueing a
+ *  notification to the author with the removal reason.
+ * Guarded by  +  (author≠moderator) +
+ * empty-reason validation + already-removed check.
+ * Allowed from pending AND active status.
+ */
+export interface RemovePostInput {
   postId: string;
   moderator: Actor;
   reason: string;
@@ -515,7 +532,86 @@ export class PostService {
   }
 
   /**
-   * active -> closed (FR04, BR03). Only the post's author or a
+   * `removePost` — soft-delete a pending or active post as a moderator.
+   *
+   * Guards (in order):
+   *   1. `isModerator(moderator)` — throws `UnauthorizedPostActionError` if
+   *      the actor is not a moderator or admin ("Only a moderator or admin
+   *      can remove a post.").
+   *   2. `ensureNotOwnPost(post, moderator)` — throws
+   *      `UnauthorizedPostActionError` if `moderator.id === post.authorId`
+   *      (the core of T-G2-5: admin is NOT exempt; author≠moderator guard).
+   *   3. Post already removed (`deletedAt !== null`) → `PostNotFoundError`.
+   *   4. `reason` non-empty → `ModerationReasonRequiredError`.
+   *
+   * Allowed from `pending` AND `active`. Effects:
+   *   - `repo.update` sets `deletedAt = now`.
+   *   - `ModerationAction { action: "remove", moderatorId, reason }`.
+   *   - `addNotification` to author type `"post_removed"` payload `{ reason }`
+   *     (mirrors `post_rejected` pattern in `rejectPostTx`).
+   *   - `addAuditLog` action `"post.remove"` via `buildPostAuditEntry`.
+   */
+  async removePost(input: RemovePostInput): Promise<PostRecord> {
+    return this.repo.withTransaction((tx) => this.removePostTx(tx, input));
+  }
+
+  private async removePostTx(
+    repo: PostRepository,
+    { postId, moderator, reason }: RemovePostInput,
+  ): Promise<PostRecord> {
+    const post = await requirePostOn(repo, postId);
+
+    if (!isModerator(moderator)) {
+      throw new UnauthorizedPostActionError(
+        "Only a moderator or admin can remove a post.",
+      );
+    }
+
+    ensureNotOwnPost(post, moderator);
+
+    if (post.deletedAt !== null) {
+      throw new PostNotFoundError(postId);
+    }
+
+    if (!reason || reason.trim().length === 0) {
+      throw new ModerationReasonRequiredError();
+    }
+
+    const now = new Date();
+    const updated = await repo.update(postId, {
+      deletedAt: now,
+    });
+
+    await repo.addModerationAction({
+      postId,
+      moderatorId: moderator.id,
+      action: "remove",
+      reason,
+    });
+
+    await repo.addNotification({
+      recipientId: post.authorId,
+      postId,
+      type: "post_removed",
+      channel: "email",
+      payload: { postId, title: post.title, reason },
+    });
+
+    await repo.addAuditLog(
+      buildPostAuditEntry({
+        actorId: moderator.id,
+        action: "post.remove",
+        postId,
+        before: { status: post.status, deletedAt: post.deletedAt },
+        after: { status: updated.status, deletedAt: updated.deletedAt },
+      }),
+    );
+
+    return updated;
+  }
+
+  /**
+   * `closePost` — active -> closed (FR04, BR03). Only the post's author or a
    * moderator/admin may close it.
    */
   async closePost(input: ClosePostInput): Promise<PostRecord> {

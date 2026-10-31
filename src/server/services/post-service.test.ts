@@ -51,7 +51,13 @@ class InMemoryPostRepository implements PostRepository {
   }
 
   async findById(id: string): Promise<PostRecord | null> {
-    return this.posts.get(id) ?? null;
+    const post = this.posts.get(id);
+    // Port contract (T-G2-5, D12): soft-deleted posts are invisible to the
+    // get/detail path — public reads treat them like they don't exist.
+    if (!post || post.deletedAt !== null) {
+      return null;
+    }
+    return post;
   }
 
   async update(id: string, data: Partial<PostRecord>): Promise<PostRecord> {
@@ -79,6 +85,7 @@ class InMemoryPostRepository implements PostRepository {
       publishedAt: null,
       closedAt: null,
       rejectedReason: null,
+      deletedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -99,6 +106,7 @@ class InMemoryPostRepository implements PostRepository {
 
     const filtered = [...this.posts.values()]
       .filter((post) => post.status === "active")
+      .filter((post) => post.deletedAt === null)
       .filter((post) => (filter.categoryId ? post.categoryId === filter.categoryId : true))
       .filter((post) => (filter.type ? post.type === filter.type : true))
       .filter((post) => {
@@ -116,6 +124,7 @@ class InMemoryPostRepository implements PostRepository {
   async listPending(): Promise<PostSummary[]> {
     return [...this.posts.values()]
       .filter((post) => post.status === "pending")
+      .filter((post) => post.deletedAt === null)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map(toSummary);
   }
@@ -189,6 +198,7 @@ function makePost(overrides: Partial<PostRecord> = {}): PostRecord {
     publishedAt: null,
     closedAt: null,
     rejectedReason: null,
+    deletedAt: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
@@ -371,6 +381,168 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       expect(repo.moderationActions).toHaveLength(0);
       expect(repo.auditLogs).toHaveLength(0);
       expect(repo.posts.get("post-1")?.status).toBe("pending");
+    });
+  });
+
+  describe("removePost — FR16 soft delete (remove as soft delete, D12)", () => {
+    it("removes a pending post: sets deletedAt, records the moderation action, audit log and author notification", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "author-1" }));
+
+      const result = await service.removePost({
+        postId: "post-1",
+        moderator: actor("moderator-1", "moderator"),
+        reason: "No longer needed.",
+      });
+
+      expect(result.deletedAt).toBeInstanceOf(Date);
+      expect(repo.moderationActions).toEqual([
+        expect.objectContaining({
+          postId: "post-1",
+          moderatorId: "moderator-1",
+          action: "remove",
+          reason: "No longer needed.",
+        }),
+      ]);
+      expect(repo.notifications).toEqual([
+        expect.objectContaining({
+          recipientId: "author-1",
+          postId: "post-1",
+          type: "post_removed",
+        }),
+      ]);
+      expect(repo.auditLogs).toEqual([
+        expect.objectContaining({
+          actorId: "moderator-1",
+          action: "post.remove",
+          targetType: "Post",
+          targetId: "post-1",
+        }),
+      ]);
+    });
+
+    it("removes an active post (allowed from pending AND active) and queues the post_removed notification", async () => {
+      repo.seed(makePost({ status: "active", authorId: "author-1" }));
+
+      const result = await service.removePost({
+        postId: "post-1",
+        moderator: actor("moderator-1", "moderator"),
+        reason: "No longer needed.",
+      });
+
+      expect(result.deletedAt).toBeInstanceOf(Date);
+      expect(repo.moderationActions).toHaveLength(1);
+      expect(repo.notifications).toHaveLength(1);
+      expect(repo.notifications[0]).toEqual(
+        expect.objectContaining({ type: "post_removed", recipientId: "author-1" }),
+      );
+      expect(repo.auditLogs).toHaveLength(1);
+    });
+  });
+
+  describe("author ≠ moderator guard on removePost (T-G2-5, D12)", () => {
+    it("throws UnauthorizedPostActionError when a moderator removes their own post, writing nothing", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "moderator-1" }));
+
+      await expect(
+        service.removePost({
+          postId: "post-1",
+          moderator: actor("moderator-1", "moderator"),
+          reason: "No longer needed.",
+        }),
+      ).rejects.toThrow(UnauthorizedPostActionError);
+      await expect(
+        service.removePost({
+          postId: "post-1",
+          moderator: actor("moderator-1", "moderator"),
+          reason: "No longer needed.",
+        }),
+      ).rejects.toThrow("Moderators cannot moderate their own posts.");
+
+      expect(repo.moderationActions).toHaveLength(0);
+      expect(repo.notifications).toHaveLength(0);
+      expect(repo.auditLogs).toHaveLength(0);
+      expect(repo.posts.get("post-1")?.deletedAt).toBeNull();
+    });
+
+    it("allows a moderator to remove another author's post", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "author-1" }));
+
+      const result = await service.removePost({
+        postId: "post-1",
+        moderator: actor("moderator-1", "moderator"),
+        reason: "No longer needed.",
+      });
+
+      expect(result.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it("blocks an admin author-moderator too (admin is NOT exempt from the self-removal guard)", async () => {
+      repo.seed(makePost({ status: "pending", authorId: "admin-1" }));
+
+      await expect(
+        service.removePost({
+          postId: "post-1",
+          moderator: actor("admin-1", "admin"),
+          reason: "No longer needed.",
+        }),
+      ).rejects.toThrow(UnauthorizedPostActionError);
+
+      expect(repo.moderationActions).toHaveLength(0);
+      expect(repo.auditLogs).toHaveLength(0);
+      expect(repo.posts.get("post-1")?.deletedAt).toBeNull();
+    });
+  });
+
+  describe("removePost — FR16 soft delete edge cases (T-G2-5)", () => {
+    it("throws PostNotFoundError when removing an already-removed post", async () => {
+      repo.seed(makePost({ status: "active", deletedAt: new Date("2026-01-02T00:00:00Z") }));
+
+      await expect(
+        service.removePost({
+          postId: "post-1",
+          moderator: actor("moderator-1", "moderator"),
+          reason: "No longer needed.",
+        }),
+      ).rejects.toThrow(PostNotFoundError);
+    });
+
+    it("rejects a non-moderator from removing a post", async () => {
+      repo.seed(makePost({ status: "pending" }));
+
+      await expect(
+        service.removePost({
+          postId: "post-1",
+          moderator: actor("user-1", "user"),
+          reason: "No longer needed.",
+        }),
+      ).rejects.toThrow(UnauthorizedPostActionError);
+    });
+
+    it("requires a non-empty reason", async () => {
+      repo.seed(makePost({ status: "pending" }));
+
+      await expect(
+        service.removePost({
+          postId: "post-1",
+          moderator: actor("moderator-1", "moderator"),
+          reason: "   ",
+        }),
+      ).rejects.toThrow(ModerationReasonRequiredError);
+    });
+
+    it("hides a removed post from listActive/listPending but keeps it in the author's own list", async () => {
+      repo.seed(makePost({ id: "post-1", status: "pending", authorId: "author-1" }));
+      repo.seed(makePost({ id: "post-2", status: "pending", authorId: "author-2" }));
+
+      await service.removePost({
+        postId: "post-1",
+        moderator: actor("moderator-1", "moderator"),
+        reason: "No longer needed.",
+      });
+
+      expect((await service.listActivePosts()).items.map((p) => p.id)).toEqual([]);
+      expect((await service.listPendingPosts()).map((p) => p.id)).toEqual(["post-2"]);
+      expect((await service.listMyPosts("author-1")).map((p) => p.id)).toEqual(["post-1"]);
     });
   });
 
@@ -971,6 +1143,7 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       repo.seed(makePost({ id: "p-reopen", status: "closed" }));
       repo.seed(makePost({ id: "p-resubmit", status: "rejected" }));
       repo.seed(makePost({ id: "p-edit", status: "active" }));
+      repo.seed(makePost({ id: "p-remove", status: "pending" }));
 
       const callsBefore = repo.withTransactionCalls;
 
@@ -995,11 +1168,16 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
         actor: actor("author-1", "user"),
         updates: { title: "Edited title" },
       });
+      await service.removePost({
+        postId: "p-remove",
+        moderator: actor("moderator-1", "moderator"),
+        reason: "No longer needed.",
+      });
       await service.createPost(makeCreateInput());
 
-      // 7 distinct transitions → 7 transaction entries (createPost opens
+      // 8 distinct transitions → 8 transaction entries (createPost opens
       // its transaction only after the BR04 guard passes).
-      expect(repo.withTransactionCalls - callsBefore).toBe(7);
+      expect(repo.withTransactionCalls - callsBefore).toBe(8);
     });
 
     it("createPost does NOT enter a transaction before the BR04 contact-info guard throws", async () => {
