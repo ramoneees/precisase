@@ -896,6 +896,36 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       ).rejects.toThrow(PostNotFoundError);
     });
 
+    it("moderator can view a closed post", async () => {
+      repo.seed(makePost({ status: "closed", authorId: "author-1" }));
+
+      const result = await service.getPost({
+        postId: "post-1",
+        viewer: viewer("moderator-1", "moderator"),
+      });
+
+      expect(result.status).toBe("closed");
+    });
+
+    it("admin can view a closed post", async () => {
+      repo.seed(makePost({ status: "closed", authorId: "author-1" }));
+
+      const result = await service.getPost({
+        postId: "post-1",
+        viewer: viewer("admin-1", "admin"),
+      });
+
+      expect(result.status).toBe("closed");
+    });
+
+    it("non-author authenticated user gets PostNotFoundError on getPost for closed post", async () => {
+      repo.seed(makePost({ status: "closed", authorId: "author-1" }));
+
+      await expect(
+        service.getPost({ postId: "post-1", viewer: viewer("stranger-1", "user") }),
+      ).rejects.toThrow(PostNotFoundError);
+    });
+
     it("throws PostNotFoundError when the post does not exist, regardless of viewer", async () => {
       await expect(
         service.getPost({ postId: "missing", viewer: null }),
