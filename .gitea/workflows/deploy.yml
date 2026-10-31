@@ -33,7 +33,8 @@ jobs:
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -i ~/.ssh/id_ed25519 "$DEPLOY_USER@$DEPLOY_HOST" 'set -euo pipefail
             cd /opt/precisase
-            git pull --ff-only origin main
+            git fetch origin main
+            git reset --hard origin/main
             docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml build web
             docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml up -d web db
             sleep 20
