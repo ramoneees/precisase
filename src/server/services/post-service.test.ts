@@ -8,6 +8,7 @@ import {
   PostNotFoundError,
   PostService,
   UnauthorizedPostActionError,
+  DEFAULT_LISTING_PAGE_SIZE,
   normalizeContactValue,
   type Actor,
   type ActorRole,
@@ -93,16 +94,22 @@ class InMemoryPostRepository implements PostRepository {
     return post;
   }
 
+  private getEffectiveDate(post: PostRecord): [Date | null, Date] {
+    // COALESCE(publishedAt, createdAt) for ordering, with createdAt as fallback
+    const effective = post.publishedAt ?? post.createdAt;
+    return [post.publishedAt, effective];
+  }
+
   async listActive(filter: {
     categoryId?: string;
     type?: PostRecord["type"];
     search?: string;
-    after?: string;
+    page?: number;
     limit?: number;
   }): Promise<PaginatedPosts> {
-    const limit = filter.limit ?? 24;
-    const cursorPost = filter.after ? this.posts.get(filter.after) : undefined;
-    const cursorDate = cursorPost?.createdAt;
+    const limit = Math.max(1, Math.min(filter.limit ?? DEFAULT_LISTING_PAGE_SIZE, 100));
+    const page = Math.max(1, filter.page ?? 1);
+    const skip = (page - 1) * limit;
 
     const filtered = [...this.posts.values()]
       .filter((post) => post.status === "active")
@@ -114,11 +121,35 @@ class InMemoryPostRepository implements PostRepository {
         const haystack = normalizeSearchText(`${post.title} ${post.description}`);
         return haystack.includes(normalizeSearchText(filter.search));
       })
-      .filter((post) => (cursorDate ? post.createdAt.getTime() < cursorDate.getTime() : true))
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      // Sort by effective publication date = COALESCE(publishedAt, createdAt) DESC
+      // createdAt desc breaks ties within the same effective date
+      // id desc as the final stable tie-break
+      .sort((a, b) => {
+        const [pa, ea] = this.getEffectiveDate(a);
+        const [pb, eb] = this.getEffectiveDate(b);
+        // Compare effective dates DESC
+        const cmp = eb.getTime() - ea.getTime();
+        if (cmp !== 0) return cmp;
+        // Tie-break by createdAt DESC
+        const createdCmp = b.createdAt.getTime() - a.createdAt.getTime();
+        if (createdCmp !== 0) return createdCmp;
+        // Final tie-break by id DESC
+        return b.id.localeCompare(a.id);
+      })
       .map(toSummary);
 
-    return paginateForTest(filtered, limit);
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const items = filtered.slice(start, end);
+
+    return {
+      items,
+      page,
+      pageSize: limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async listPending(): Promise<PostSummary[]> {
@@ -172,14 +203,6 @@ function toSummary(post: PostRecord): PostSummary {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { contactMethod, contactValue, ...summary } = post;
   return summary;
-}
-
-function paginateForTest(rows: PostSummary[], limit: number): PaginatedPosts {
-  if (rows.length <= limit) {
-    return { items: rows, nextCursor: null };
-  }
-  const page = rows.slice(0, limit);
-  return { items: page, nextCursor: page[page.length - 1]!.id };
 }
 
 function makePost(overrides: Partial<PostRecord> = {}): PostRecord {
@@ -870,7 +893,10 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       const result = await service.listActivePosts({ categoryId: "category-1" });
 
       expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
-      expect(result.nextCursor).toBeNull();
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(DEFAULT_LISTING_PAGE_SIZE);
+      expect(result.total).toBe(1);
+      expect(result.totalPages).toBe(1);
     });
 
     it("passes filter (category, type, search) through to the repository", async () => {
@@ -888,6 +914,149 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       const result = await service.listActivePosts({ type: "offer", categoryId: "category-2" });
 
       expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
+    });
+
+    it("orders by effective publication date (publishedAt desc, createdAt fallback for legacy rows)", async () => {
+      repo.seed(
+        makePost({
+          id: "post-1",
+          status: "active",
+          publishedAt: new Date("2026-01-05T00:00:00Z"),
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+        }),
+      );
+      repo.seed(
+        makePost({
+          id: "post-2",
+          status: "active",
+          publishedAt: null,
+          createdAt: new Date("2026-01-03T00:00:00Z"),
+        }),
+      );
+      repo.seed(
+        makePost({
+          id: "post-3",
+          status: "active",
+          publishedAt: new Date("2026-01-04T00:00:00Z"),
+          createdAt: new Date("2026-01-02T00:00:00Z"),
+        }),
+      );
+
+      const result = await service.listActivePosts({});
+
+      expect(result.items.map((p) => p.id)).toEqual(["post-1", "post-3", "post-2"]);
+    });
+
+    it("legacy row with null publishedAt but newer createdAt ranks above approved row with earlier publishedAt (COALESCE semantics)", async () => {
+      // Legacy row: publishedAt=null, createdAt=2026-01-06 → effective date = 2026-01-06
+      // Approved row: publishedAt=2026-01-05, createdAt=2026-01-01 → effective date = 2026-01-05
+      // With COALESCE DESC: legacy (2026-01-06) comes FIRST
+      // With nulls:last DESC: approved (2026-01-05) comes FIRST (bug)
+      repo.seed(
+        makePost({
+          id: "post-legacy",
+          status: "active",
+          publishedAt: null,
+          createdAt: new Date("2026-01-06T00:00:00Z"),
+        }),
+      );
+      repo.seed(
+        makePost({
+          id: "post-approved",
+          status: "active",
+          publishedAt: new Date("2026-01-05T00:00:00Z"),
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+        }),
+      );
+
+      const result = await service.listActivePosts({});
+
+      // Legacy row must come first because COALESCE(publishedAt, createdAt) = 2026-01-06 > 2026-01-05
+      expect(result.items.map((p) => p.id)).toEqual(["post-legacy", "post-approved"]);
+    });
+
+    it("defaults to a page size of 10 and never exceeds one page of items", async () => {
+      for (let i = 1; i <= 11; i++) {
+        repo.seed(
+          makePost({
+            id: `post-${i}`,
+            status: "active",
+            createdAt: new Date(Date.UTC(2026, 0, i)),
+          }),
+        );
+      }
+
+      const result = await service.listActivePosts({});
+
+      expect(result.items).toHaveLength(DEFAULT_LISTING_PAGE_SIZE);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(DEFAULT_LISTING_PAGE_SIZE);
+      expect(result.total).toBe(11);
+      expect(result.totalPages).toBe(2);
+    });
+
+    it("computes numbered pagination totals (25 items -> 3 pages, page 2 has 10)", async () => {
+      for (let i = 0; i < 25; i++) {
+        repo.seed(
+          makePost({
+            id: `post-${i + 1}`,
+            status: "active",
+            createdAt: new Date(Date.UTC(2026, 0, i + 1)),
+          }),
+        );
+      }
+
+      const page1 = await service.listActivePosts({ page: 1, limit: DEFAULT_LISTING_PAGE_SIZE });
+      expect(page1.items).toHaveLength(10);
+      expect(page1.page).toBe(1);
+      expect(page1.pageSize).toBe(DEFAULT_LISTING_PAGE_SIZE);
+      expect(page1.total).toBe(25);
+      expect(page1.totalPages).toBe(3);
+
+      const page2 = await service.listActivePosts({ page: 2, limit: DEFAULT_LISTING_PAGE_SIZE });
+      expect(page2.items).toHaveLength(10);
+      expect(page2.page).toBe(2);
+      expect(page2.total).toBe(25);
+      expect(page2.totalPages).toBe(3);
+
+      const page3 = await service.listActivePosts({ page: 3, limit: DEFAULT_LISTING_PAGE_SIZE });
+      expect(page3.items).toHaveLength(5);
+      expect(page3.page).toBe(3);
+      expect(page3.total).toBe(25);
+      expect(page3.totalPages).toBe(3);
+    });
+
+    it("paginates: numbered pages slice the ordered list (limit 2 -> pages of 2)", async () => {
+
+
+      for (let i = 0; i < 5; i++) {
+        repo.seed(
+          makePost({
+            id: `post-${i + 1}`,
+            status: "active",
+            createdAt: new Date(Date.UTC(2026, 0, i + 1)),
+          }),
+        );
+      }
+
+      const page1 = await service.listActivePosts({ page: 1, limit: 2 });
+      expect(page1.items.map((p) => p.id)).toEqual(["post-5", "post-4"]);
+      expect(page1.page).toBe(1);
+      expect(page1.pageSize).toBe(2);
+      expect(page1.total).toBe(5);
+      expect(page1.totalPages).toBe(3);
+
+      const page2 = await service.listActivePosts({ page: 2, limit: 2 });
+      expect(page2.items.map((p) => p.id)).toEqual(["post-3", "post-2"]);
+      expect(page2.page).toBe(2);
+      expect(page2.total).toBe(5);
+      expect(page2.totalPages).toBe(3);
+
+      const page3 = await service.listActivePosts({ page: 3, limit: 2 });
+      expect(page3.items.map((p) => p.id)).toEqual(["post-1"]);
+      expect(page3.page).toBe(3);
+      expect(page3.total).toBe(5);
+      expect(page3.totalPages).toBe(3);
     });
 
     it("finds a post via exact non-accented match", async () => {
@@ -912,30 +1081,6 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       const result = await service.listActivePosts({ search: "Ação" });
 
       expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
-    });
-
-    it("paginates: returns nextCursor when more rows exist past `limit`", async () => {
-      for (let i = 0; i < 5; i++) {
-        repo.seed(
-          makePost({
-            id: `post-${i + 1}`,
-            status: "active",
-            createdAt: new Date(Date.UTC(2026, 0, i + 1)),
-          }),
-        );
-      }
-
-      const page1 = await service.listActivePosts({ limit: 2 });
-      expect(page1.items.map((p) => p.id)).toEqual(["post-5", "post-4"]);
-      expect(page1.nextCursor).toBe("post-4");
-
-      const page2 = await service.listActivePosts({ limit: 2, after: page1.nextCursor! });
-      expect(page2.items.map((p) => p.id)).toEqual(["post-3", "post-2"]);
-      expect(page2.nextCursor).toBe("post-2");
-
-      const page3 = await service.listActivePosts({ limit: 2, after: page2.nextCursor! });
-      expect(page3.items.map((p) => p.id)).toEqual(["post-1"]);
-      expect(page3.nextCursor).toBeNull();
     });
   });
 

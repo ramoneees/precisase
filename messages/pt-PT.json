@@ -28,7 +28,11 @@
       "offers": "Ofertas"
     },
     "resultsCount": "{count, plural, one {# post ativo} other {# posts ativos}}",
-    "loadMore": "Ver mais",
+    "pagination": {
+      "prev": "Anterior",
+      "next": "Próximo",
+      "pageLabel": "Página {page}"
+    },
     "empty": {
       "title": "Sem resultados",
       "description": "Tenta outra pesquisa ou remove filtros."

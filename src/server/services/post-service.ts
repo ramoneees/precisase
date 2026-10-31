@@ -137,30 +137,32 @@ export type CreatePostData = Omit<
   | "deletedAt"
 > & { extraAttributes?: Record<string, unknown> };
 
-/** Filter accepted by the shop-window listing query (FR06–FR08). */
+/**
+ * Filter accepted by the shop-window listing query (FR06–FR08).
+ *
+ * Pagination is numbered (offset) rather than cursor-based: `page` is
+ * 1-based and `limit` defaults to `DEFAULT_LISTING_PAGE_SIZE`. The
+ * repository resolves `(page, limit)` into an offset window and computes
+ * `total`/`totalPages` via a count query.
+ */
 export interface ListActivePostsFilter {
   categoryId?: string;
   type?: PostTypeValue;
   search?: string;
-  /**
-   * Cursor-based pagination: id of the last post on the previous page.
-   * Combined with `limit`, the listing returns rows older than this
-   * cursor (createdAt-desc order). Undefined on the first page.
-   */
-  after?: string;
+  /** 1-based page number into the approval-date-ordered result set. Defaults to 1. */
+  page?: number;
+  /** Page size for this request; defaults to `DEFAULT_LISTING_PAGE_SIZE`. */
   limit?: number;
 }
 
-export const DEFAULT_LISTING_PAGE_SIZE = 24;
+export const DEFAULT_LISTING_PAGE_SIZE = 10;
 
 export interface PaginatedPosts {
   items: PostSummary[];
-  /**
-   * Cursor for the next page, or `null` if the requested page was the
-   * last one. The repository signals "more rows exist" by fetching
-   * `limit + 1` rows and exposing the (limit+1)th row's id here.
-   */
-  nextCursor: string | null;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 /**
@@ -185,9 +187,9 @@ export interface PostRepository {
    * full-text/trigram search per §5.1). Must only ever return `active`
    * posts. Returns `PostSummary` (no contact info) — listings never render
    * contact details, and stripping them here makes it impossible for the
-   * repository to silently decrypt rows it doesn't need to. Cursor-
-   * paginated: fetch `limit + 1` rows and expose the trailing row's id as
-   * `nextCursor` (null when the page was the last one).
+   * repository to silently decrypt rows it doesn't need to.
+   * Numbered (offset) pagination: resolve `page`/`limit` into an item
+   * window plus `total`/`totalPages` via a count query.
    */
   listActive(filter: ListActivePostsFilter): Promise<PaginatedPosts>;
   /**
@@ -889,7 +891,8 @@ export class PostService {
    * Shop-window listing (FR06–FR08). Thin delegation to the repository —
    * filtering/search is mostly a query concern (Postgres full-text +
    * trigram search per §5.1) — but the port contract guarantees only
-   * `active` posts are ever returned.
+   * `active` posts are ever returned. Pagination (numbered pages) and
+   * ordering (effective approval date) are resolved by the repository.
    */
   async listActivePosts(filter: ListActivePostsFilter = {}): Promise<PaginatedPosts> {
     return this.repo.listActive(filter);

@@ -28,7 +28,11 @@
       "offers": "Offers"
     },
     "resultsCount": "{count, plural, one {# active post} other {# active posts}}",
-    "loadMore": "Load more",
+    "pagination": {
+      "prev": "Previous",
+      "next": "Next",
+      "pageLabel": "Page {page}"
+    },
     "empty": {
       "title": "No results",
       "description": "Try a different search or remove filters."

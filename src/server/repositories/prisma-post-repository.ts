@@ -115,20 +115,6 @@ function toPostSummaryFromRaw(row: RawPostSummaryRow): PostSummary {
 }
 
 /**
- * Splits a fetched-`limit+1` row list into the page (`items`) plus a
- * `nextCursor` pointing at the next page's start (the (limit+1)th row's
- * id). Returns `nextCursor: null` when fewer than `limit+1` rows were
- * returned, signaling end-of-list to the caller.
- */
-function paginate(rows: PostSummary[], limit: number): PaginatedPosts {
-  if (rows.length <= limit) {
-    return { items: rows, nextCursor: null };
-  }
-  const page = rows.slice(0, limit);
-  return { items: page, nextCursor: page[page.length - 1]!.id };
-}
-
-/**
  * Maps a Prisma `Post` row to the plaintext `PostRecord` domain type —
  * decrypting `contactValue` is the one thing this function does that a
  * generic "select all columns" mapper wouldn't.
@@ -267,27 +253,41 @@ export class PrismaPostRepository implements PostRepository {
   async listActive(filter: ListActivePostsFilter): Promise<PaginatedPosts> {
     const search = filter.search?.trim();
     const limit = Math.max(1, Math.min(filter.limit ?? DEFAULT_LISTING_PAGE_SIZE, 100));
-    const cursorDate = filter.after ? await this.cursorCreatedAt(filter.after) : null;
+    const page = Math.max(1, filter.page ?? 1);
+    const skip = (page - 1) * limit;
 
-    if (!search) {
-      const rows = await this.client.post.findMany({
-        where: {
-          status: "active",
-          deletedAt: null,
-          ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
-          ...(filter.type ? { type: filter.type } : {}),
-          ...(cursorDate ? { createdAt: { lt: cursorDate } } : {}),
-        },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        take: limit + 1,
-        select: POST_SUMMARY_SELECT,
-      });
+    const items: PostSummary[] = await this.searchActivePostsViaFtsIndex(filter, search, limit, skip);
 
-      return paginate(rows.map(toPostSummary), limit);
+    // Build the same conditions used by searchActivePostsViaFtsIndex so
+    // total/totalPages include the search condition when present, ensuring
+    // totals match results for any filter combination.
+    const countConditions: Prisma.Sql[] = [
+      Prisma.sql`status = 'active'::post_status`,
+    ];
+    if (filter.categoryId) {
+      countConditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
+    }
+    if (filter.type) {
+      countConditions.push(Prisma.sql`type = ${filter.type}::post_type`);
+    }
+    if (search) {
+      countConditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), posts_unaccent(${normalizeSearchText(search)}))`);
     }
 
-    const searchRows = await this.searchActivePostsViaFtsIndex(filter, search, limit, cursorDate);
-    return paginate(searchRows, limit);
+    const total = await this.client.$queryRaw<{ total: number }[]>`
+      SELECT COUNT(*) as total
+      FROM posts
+      WHERE ${Prisma.join(countConditions, " AND ")}
+    `;
+    const [{ total: countTotal }] = total;
+
+    return {
+      items,
+      page,
+      pageSize: limit,
+      total: countTotal,
+      totalPages: Math.ceil(countTotal / limit),
+    };
   }
 
   async listByAuthor(authorId: string): Promise<PostSummary[]> {
@@ -356,46 +356,45 @@ export class PrismaPostRepository implements PostRepository {
   }
 
   /**
-   * Instance-method mirror of the module-level `cursorCreatedAt` helper
-   * — uses the (possibly tx-scoped) client so cursor lookups inside a
-   * transaction read from the transaction snapshot.
-   */
-  private async cursorCreatedAt(postId: string): Promise<Date | null> {
-    const row = await this.client.post.findUnique({
-      where: { id: postId },
-      select: { createdAt: true },
-    });
-    return row?.createdAt ?? null;
-  }
-
-  /**
    * Instance-method mirror of the module-level FTS search helper — same
-   * tx-snapshot rationale as `cursorCreatedAt`.
+   * tx-snapshot rationale as the old `cursorCreatedAt`.
    *
    * NOTE: the `$queryRaw` call does not bind to the tx client even when
    * invoked on `this.client`; this is acceptable because listActive is a
    * read-only listing query, never invoked from inside a state-transition
    * transaction. If that changes, the query must move to `tx.$queryRaw`.
+   *
+   * Generalized so the `search_vector` condition is optional: when called
+   * without a search string it returns all active posts ordered by
+   * `COALESCE(published_at, created_at) DESC, id DESC` — usable for both
+   * the FTS search path and the plain listing path, guaranteeing ordering
+   * equivalence between the two.
+   *
+   * The raw SQL `ORDER BY COALESCE(published_at, created_at) DESC, id DESC`
+   * is the source of truth for ordering equivalence. Prisma's typed
+   * `orderBy` cannot express `COALESCE`; the `nulls: "last"` approach was
+   * therefore semantically different (legacy rows with `publishedAt=null`
+   * fall *after* approved rows instead of *before*). This comment documents
+   * the discrepancy for future maintainers.
    */
   private async searchActivePostsViaFtsIndex(
     filter: ListActivePostsFilter,
-    search: string,
-    limit: number,
-    cursorDate: Date | null,
+    search?: string,
+    limit: number = DEFAULT_LISTING_PAGE_SIZE,
+    skip: number = 0,
   ): Promise<PostSummary[]> {
     const conditions: Prisma.Sql[] = [
       Prisma.sql`status = 'active'::post_status`,
       Prisma.sql`deleted_at IS NULL`,
-      Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), posts_unaccent(${normalizeSearchText(search)}))`,
     ];
+    if (search) {
+      conditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), posts_unaccent(${normalizeSearchText(search)}))`);
+    }
     if (filter.categoryId) {
       conditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);
     }
     if (filter.type) {
       conditions.push(Prisma.sql`type = ${filter.type}::post_type`);
-    }
-    if (cursorDate) {
-      conditions.push(Prisma.sql`created_at < ${cursorDate}`);
     }
 
     const rows = await this.client.$queryRaw<RawPostSummaryRow[]>`
@@ -416,8 +415,8 @@ export class PrismaPostRepository implements PostRepository {
         updated_at    AS "updatedAt"
       FROM posts
       WHERE ${Prisma.join(conditions, " AND ")}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ${limit + 1}
+      ORDER BY COALESCE(published_at, created_at) DESC, id DESC
+      LIMIT ${limit} OFFSET ${skip}
     `;
 
     return rows.map(toPostSummaryFromRaw);

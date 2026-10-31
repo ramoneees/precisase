@@ -6,9 +6,6 @@ import en from "../../../messages/en.json";
 import { PostCard, type PostCardData } from "./post-card";
 import { EmptyState } from "./empty-state";
 
-// `@/i18n/navigation`'s `Link` wraps Next.js App Router APIs that aren't
-// available outside of a running Next.js server — stubbed the same way
-// `signup-form.test.tsx` stubs it, so these components can render in jsdom.
 vi.mock("@/i18n/navigation", () => ({
   Link: ({ href, children, ...rest }: { href: unknown; children: React.ReactNode }) => (
     <a href={typeof href === "string" ? href : "#"} {...rest}>
@@ -27,6 +24,7 @@ function makeCard(overrides: Partial<PostCardData> = {}): PostCardData {
       "Preciso de duas ou três pessoas disponíveis no sábado de manhã para ajudar a transportar um sofá.",
     authorName: "Ana Silva",
     createdAt: new Date("2026-06-01T10:00:00Z"),
+    effectiveAt: new Date("2026-06-01T10:00:00Z"),
     photoUrl: "data:image/svg+xml,%3Csvg%3E%3C/svg%3E",
     ...overrides,
   };
@@ -78,7 +76,6 @@ describe("PostCard", () => {
     renderCard(makeCard({ description: longDescription }));
 
     const shown = screen.getByText(/^A+…$/);
-    // 110 chars of "A" plus the ellipsis character.
     expect(shown.textContent).toHaveLength(111);
   });
 
@@ -93,6 +90,19 @@ describe("PostCard", () => {
 
     expect(screen.getByText(en.post.type.offer)).toBeInTheDocument();
     expect(screen.getByText(en.category.donation)).toBeInTheDocument();
+  });
+
+  it("renders only the effective date and not the creation date when they differ", () => {
+    const card = makeCard({
+      createdAt: new Date("2026-05-01T10:00:00Z"),
+      effectiveAt: new Date("2026-06-15T10:00:00Z"),
+    });
+    renderCard(card);
+
+    // The effective (approval) date should be shown
+    expect(screen.getByText("15/06/2026")).toBeInTheDocument();
+    // The creation date should NOT be rendered
+    expect(screen.queryByText("01/05/2026")).not.toBeInTheDocument();
   });
 });
 
