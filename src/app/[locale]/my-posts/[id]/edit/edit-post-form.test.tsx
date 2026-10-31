@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
@@ -41,6 +41,22 @@ function makeInitial(overrides: Partial<Parameters<typeof EditPostForm>[0]["init
     contactValue: "ana@example.com",
     ...overrides,
   };
+}
+
+function dispatchBeforeUnload() {
+  const event = new Event("beforeunload", { cancelable: true }) as BeforeUnloadEvent;
+  window.dispatchEvent(event);
+  return event;
+}
+
+function clickInternalLink(href: string) {
+  const anchor = document.createElement("a");
+  anchor.setAttribute("href", href);
+  document.body.appendChild(anchor);
+  const event = new MouseEvent("click", { bubbles: true, cancelable: true, composed: true });
+  anchor.dispatchEvent(event);
+  document.body.removeChild(anchor);
+  return event;
 }
 
 function renderForm(mode: EditPostFormMode, locale: "pt-PT" | "en" = "pt-PT", rejectedReason: string | null = null) {
@@ -168,5 +184,34 @@ describe("EditPostForm", () => {
       expect(screen.getByText("Falta informação de contacto.")).toBeInTheDocument();
       expect(screen.getByText("Motivo da rejeição:")).toBeInTheDocument();
     });
+  });
+});
+
+describe("EditPostForm unsaved-changes guard", () => {
+  beforeEach(() => {
+    vi.mocked(editActivePostAction).mockReset();
+    vi.mocked(resubmitPostAction).mockReset();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stays clean without edits and warns once a field is edited", async () => {
+    const user = userEvent.setup();
+    renderForm("active");
+
+    const cleanEvent = dispatchBeforeUnload();
+    expect(cleanEvent.defaultPrevented).toBe(false);
+
+    await user.clear(screen.getByLabelText("Título"));
+    await user.type(screen.getByLabelText("Título"), "Título atualizado");
+
+    const dirtyEvent = dispatchBeforeUnload();
+    expect(dirtyEvent.defaultPrevented).toBe(true);
+
+    clickInternalLink("/my-posts");
+    expect(window.confirm).toHaveBeenCalledWith(ptPT.myPosts.edit.unsavedChangesWarning);
   });
 });
