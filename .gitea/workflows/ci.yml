@@ -1,0 +1,50 @@
+name: CI
+
+# Gitea Actions — mirror of .github/workflows/ci.yml for self-hosted CI.
+# Runner: olympus-runner (label node-22, node:22-bookworm + dind host).
+# Node version is pinned by setup-node below (20, matching GitHub CI).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: node-22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Check i18n key parity
+        run: node scripts/check-i18n-parity.mjs
