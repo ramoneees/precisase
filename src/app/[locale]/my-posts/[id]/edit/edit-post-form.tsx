@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { colors } from "@/lib/design-tokens";
+import { useUnsavedChangesGuard } from "@/lib/use-unsaved-changes-guard";
 import type { CategoryLite } from "@/server/categories";
 import type { ContactMethodValue, PostTypeValue } from "@/server/services/post-service";
 import { editActivePostAction, type EditActivePostErrorCode } from "./edit-active-post-action";
@@ -86,6 +87,23 @@ export function EditPostForm({
     (initial.extraAttributes?.location as string) || ""
   );
 
+  const initialEmploymentType = (initial.extraAttributes?.employmentType as string) || "";
+  const initialSalaryRange = (initial.extraAttributes?.salaryRange as string) || "";
+  const initialJobLocation = (initial.extraAttributes?.location as string) || "";
+
+  const isDirty =
+    type !== initial.type ||
+    categoryId !== initial.categoryId ||
+    title !== initial.title ||
+    description !== initial.description ||
+    contactMethod !== initial.contactMethod ||
+    contactValue !== initial.contactValue ||
+    country !== phoneCountry ||
+    employmentType !== initialEmploymentType ||
+    salaryRange !== initialSalaryRange ||
+    jobLocation !== initialJobLocation;
+  useUnsavedChangesGuard(isDirty, t("unsavedChangesWarning"));
+
   const isPhoneLike =
     contactMethod === "phone" || contactMethod === "whatsapp";
 
@@ -141,6 +159,18 @@ export function EditPostForm({
         setError(result.error);
         return;
       }
+
+      // Reset to the post's initial values so the dirty guard deactivates before navigating away.
+      setType(initial.type);
+      setCategoryId(initial.categoryId);
+      setTitle(initial.title);
+      setDescription(initial.description);
+      setContactMethod(initial.contactMethod);
+      setContactValue(initial.contactValue);
+      setCountry(phoneCountry);
+      setEmploymentType(initialEmploymentType);
+      setSalaryRange(initialSalaryRange);
+      setJobLocation(initialJobLocation);
 
       showToast(t(mode === "active" ? "activeToastSuccess" : "toastSuccess"));
       router.push("/my-posts");

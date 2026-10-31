@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { normalizeSearchText } from "@/lib/normalize-search-text";
 import {
   ContactInfoRequiredError,
   InvalidPhoneError,
@@ -110,8 +111,8 @@ class InMemoryPostRepository implements PostRepository {
       .filter((post) => (filter.type ? post.type === filter.type : true))
       .filter((post) => {
         if (!filter.search) return true;
-        const haystack = `${post.title} ${post.description}`.toLowerCase();
-        return haystack.includes(filter.search.toLowerCase());
+        const haystack = normalizeSearchText(`${post.title} ${post.description}`);
+        return haystack.includes(normalizeSearchText(filter.search));
       })
       .filter((post) => (cursorDate ? post.createdAt.getTime() < cursorDate.getTime() : true))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -889,6 +890,30 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
       expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
     });
 
+    it("finds a post via exact non-accented match", async () => {
+      repo.seed(makePost({ id: "post-1", status: "active", title: "Carro" }));
+
+      const result = await service.listActivePosts({ search: "Carro" });
+
+      expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
+    });
+
+    it('finds accented content via unaccented query ("acao" → "Ação")', async () => {
+      repo.seed(makePost({ id: "post-1", status: "active", title: "Ação" }));
+
+      const result = await service.listActivePosts({ search: "acao" });
+
+      expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
+    });
+
+    it('finds unaccented content via accented query ("Ação" → "Acao")', async () => {
+      repo.seed(makePost({ id: "post-1", status: "active", title: "Acao" }));
+
+      const result = await service.listActivePosts({ search: "Ação" });
+
+      expect(result.items.map((p) => p.id)).toEqual(["post-1"]);
+    });
+
     it("paginates: returns nextCursor when more rows exist past `limit`", async () => {
       for (let i = 0; i < 5; i++) {
         repo.seed(
@@ -1065,6 +1090,36 @@ describe("PostService state machine (ARCHITECTURE.md §5.3)", () => {
 
       await expect(
         service.getPost({ postId: "post-1", viewer: null }),
+      ).rejects.toThrow(PostNotFoundError);
+    });
+
+    it("moderator can view a closed post", async () => {
+      repo.seed(makePost({ status: "closed", authorId: "author-1" }));
+
+      const result = await service.getPost({
+        postId: "post-1",
+        viewer: viewer("moderator-1", "moderator"),
+      });
+
+      expect(result.status).toBe("closed");
+    });
+
+    it("admin can view a closed post", async () => {
+      repo.seed(makePost({ status: "closed", authorId: "author-1" }));
+
+      const result = await service.getPost({
+        postId: "post-1",
+        viewer: viewer("admin-1", "admin"),
+      });
+
+      expect(result.status).toBe("closed");
+    });
+
+    it("non-author authenticated user gets PostNotFoundError on getPost for closed post", async () => {
+      repo.seed(makePost({ status: "closed", authorId: "author-1" }));
+
+      await expect(
+        service.getPost({ postId: "post-1", viewer: viewer("stranger-1", "user") }),
       ).rejects.toThrow(PostNotFoundError);
     });
 
