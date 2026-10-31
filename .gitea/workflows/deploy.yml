@@ -1,0 +1,44 @@
+name: Deploy
+
+# Gitea Actions deploy — staging on olympus (192.168.50.11) via SSH.
+# The image is built ON the docker host (compose build), so nothing leaves
+# the box — no registry round-trip. The web container's entrypoint runs
+# `prisma migrate deploy` on boot (see docker-compose.staging.yml).
+#
+# Repo secrets required:
+#   DEPLOY_SSH_KEY  — ed25519 private key (gitea-precisase-deploy)
+#   DEPLOY_HOST     — 192.168.50.11
+#   DEPLOY_USER     — hermes
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to staging (olympus .11)
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_ed25519 "$DEPLOY_USER@$DEPLOY_HOST" 'set -euo pipefail
+            cd /opt/precisase
+            git pull --ff-only origin main
+            docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml build web
+            docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml up -d web db
+            sleep 20
+            curl -fsS http://localhost:3005/api/health && echo " — staging healthy"'
+
+      - name: Report
+        if: always()
+        run: echo "Deploy attempt finished at $(date -u +%FT%TZ)"

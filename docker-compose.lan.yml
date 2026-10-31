@@ -1,0 +1,14 @@
+# LAN exposure overlay — publishes the web container on the docker host
+# (olympus .11) at http://192.168.50.11:3005 for staging dogfood QA.
+#
+# The base docker-compose.yml deliberately publishes NO ports (Cloudflare
+# Tunnel posture, §7.3); this overlay opts staging into direct LAN access
+# while the tunnel/domain decision (docs/ARCHITECTURE.md §12 Q12) is open.
+# Combine with:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#     -f docker-compose.lan.yml up -d web db
+
+services:
+  web:
+    ports:
+      - "3005:3000"
