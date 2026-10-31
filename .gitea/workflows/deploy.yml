@@ -39,7 +39,7 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml up -d web db
             # migrations: run via exec (container entrypoint does NOT migrate)
             for i in $(seq 1 12); do
-              if docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml exec -T web pnpm exec prisma migrate deploy; then break; fi
+              if docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml exec -T web node_modules/.bin/prisma migrate deploy; then break; fi
               echo "migrate not ready yet (attempt $i)"; sleep 5
             done
             for i in $(seq 1 12); do
