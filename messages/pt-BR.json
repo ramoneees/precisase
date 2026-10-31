@@ -116,6 +116,7 @@
       "submit": "Enviar para aprovação",
       "submitting": "Enviando…",
       "toastSuccess": "Post enviado para aprovação.",
+      "unsavedChangesWarning": "Você tem alterações não salvas. Se sair agora, elas serão perdidas. Quer continuar?",
       "errors": {
         "invalidInput": "Verifique os dados informados e tente novamente.",
         "uploadInvalidType": "Só são aceitas imagens JPEG, PNG ou WebP.",
@@ -165,6 +166,7 @@
       "activeSubmit": "Salvar alterações",
       "activeSubmitting": "Salvando…",
       "activeToastSuccess": "Post atualizado.",
+      "unsavedChangesWarning": "Você tem alterações não salvas. Se sair agora, elas serão perdidas. Quer continuar?",
       "errors": {
         "invalidInput": "Verifique os dados informados e tente novamente.",
         "unauthorized": "Você não tem permissão para editar este post.",

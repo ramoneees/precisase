@@ -9,6 +9,7 @@
 
 import { Prisma, type Post as PrismaPost } from "@/generated/prisma/client";
 import { PrismaClient } from "@/generated/prisma/client";
+import { normalizeSearchText } from "@/lib/normalize-search-text";
 import { decrypt, encrypt } from "@/server/crypto/contact-encryption";
 import type {
   AuditLogRecord,
@@ -135,6 +136,7 @@ async function toPostRecord(post: PrismaPost): Promise<PostRecord> {
     extraAttributes: (post.extraAttributes as Record<string, unknown> | null) ?? {},
     publishedAt: post.publishedAt,
     closedAt: post.closedAt,
+    deletedAt: post.deletedAt,
     rejectedReason: post.rejectedReason,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
@@ -254,14 +256,7 @@ export class PrismaPostRepository implements PostRepository {
     const page = Math.max(1, filter.page ?? 1);
     const skip = (page - 1) * limit;
 
-    let items: PostSummary[];
-    if (search) {
-      const rows = await this.searchActivePostsViaFtsIndex(filter, search, limit, skip);
-      items = rows.map(toPostSummaryFromRaw);
-    } else {
-      const rows = await this.searchActivePostsViaFtsIndex(filter, undefined, limit, skip);
-      items = rows.map(toPostSummaryFromRaw);
-    }
+    const items: PostSummary[] = await this.searchActivePostsViaFtsIndex(filter, search, limit, skip);
 
     // Build the same conditions used by searchActivePostsViaFtsIndex so
     // total/totalPages include the search condition when present, ensuring
@@ -276,7 +271,7 @@ export class PrismaPostRepository implements PostRepository {
       countConditions.push(Prisma.sql`type = ${filter.type}::post_type`);
     }
     if (search) {
-      countConditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`);
+      countConditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), posts_unaccent(${normalizeSearchText(search)}))`);
     }
 
     const total = await this.client.$queryRaw<{ total: number }[]>`
@@ -307,7 +302,7 @@ export class PrismaPostRepository implements PostRepository {
 
   async listPending(): Promise<PostSummary[]> {
     const posts = await this.client.post.findMany({
-      where: { status: "pending" },
+      where: { status: "pending", deletedAt: null },
       orderBy: { createdAt: "asc" },
       select: POST_SUMMARY_SELECT,
     });
@@ -390,9 +385,10 @@ export class PrismaPostRepository implements PostRepository {
   ): Promise<PostSummary[]> {
     const conditions: Prisma.Sql[] = [
       Prisma.sql`status = 'active'::post_status`,
+      Prisma.sql`deleted_at IS NULL`,
     ];
     if (search) {
-      conditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), ${search})`);
+      conditions.push(Prisma.sql`search_vector @@ plainto_tsquery(posts_search_config(locale), posts_unaccent(${normalizeSearchText(search)}))`);
     }
     if (filter.categoryId) {
       conditions.push(Prisma.sql`category_id = ${filter.categoryId}::uuid`);

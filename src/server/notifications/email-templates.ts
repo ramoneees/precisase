@@ -177,6 +177,10 @@ export async function buildNotificationEmail(
       // guard below still catches genuinely untemplated types.
       throw new Error("chat_message_received notifications are in_app only and never emailed.");
     }
+    case "post_removed": {
+      throw new Error("post_removed notifications have no email template yet; " +
+        "worker will deliver via in_app channel only.");
+    }
     default: {
       // Exhaustiveness guard — if a new NotificationType is ever added to
       // the Prisma schema without a matching template here, fail loudly

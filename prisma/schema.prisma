@@ -95,6 +95,7 @@ enum NotificationType {
   post_closed
   password_reset
   chat_message_received
+  post_removed
 
   @@map("notification_type")
 }
@@ -230,6 +231,10 @@ model Post {
   extraAttributes Json                     @default("{}") @map("extra_attributes")
   publishedAt     DateTime?                @map("published_at") @db.Timestamptz()
   closedAt        DateTime?                @map("closed_at") @db.Timestamptz()
+  /// FR16 soft delete (D12) — set by a moderator's `removePost`; the post
+  /// is treated as removed (invisible to the public) from this timestamp
+  /// onward. The author keeps visibility in their own my-posts view.
+  deletedAt       DateTime?                @map("deleted_at") @db.Timestamptz()
   rejectedReason  String?                  @map("rejected_reason")
   /// Generated column (`to_tsvector(locale, title || ' ' || description)`) —
   /// created via raw SQL in the migration, not managed by Prisma Client.

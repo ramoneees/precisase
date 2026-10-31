@@ -1,7 +1,10 @@
 name: Deploy
 
-# Deploy pipeline — staging auto on merge, prod via GitHub Environment
-# approval gate. See docs/ops/deploy.md for the runbook, rollback procedure,
+# Deploy pipeline — currently push-trigger DISABLED: deploys are
+# agent-driven (Boss decision: option B, 2026-10-29 — image built and
+# pushed on demand). Manual workflow_dispatch only (staging AND prod).
+# Wiring the SSH secrets and re-enabling the push trigger is the future
+# path per docs/ops/deploy.md (runbook, rollback procedure,
 # and the `--webpack` build-flag rationale (Sentry SDK on Next.js 16 — turbopack
 # support not GA per mvp-launch-readiness.md §"Decisions").
 #
@@ -11,7 +14,7 @@ name: Deploy
 # (simpler than Watchtower, no self-hosted runner per plan §Decisions).
 #
 # Two jobs:
-#   1. deploy-staging — on push to main, deploys to staging.${APP_DOMAIN}.
+#   1. deploy-staging — manual only, deploys to staging.${APP_DOMAIN}.
 #   2. deploy-prod     — on workflow_dispatch, gated by the `production`
 #                        GitHub Environment (Settings → Environments →
 #                        production → Required reviewers).
@@ -23,9 +26,6 @@ name: Deploy
 #                                               needed for the registry)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       sha:
