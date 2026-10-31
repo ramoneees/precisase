@@ -37,8 +37,16 @@ jobs:
             git reset --hard origin/main
             docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml build web
             docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml up -d web db
-            sleep 20
-            curl -fsS http://localhost:3005/api/health && echo " — staging healthy"'
+            # migrations: run via exec (container entrypoint does NOT migrate)
+            for i in $(seq 1 12); do
+              if docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.lan.yml exec -T web pnpm exec prisma migrate deploy; then break; fi
+              echo "migrate not ready yet (attempt $i)"; sleep 5
+            done
+            for i in $(seq 1 12); do
+              if curl -fsS http://localhost:3005/api/health > /dev/null; then echo "staging healthy (attempt $i)"; exit 0; fi
+              echo "health not ready (attempt $i)"; sleep 10
+            done
+            echo "health check failed after retries"; exit 1'
 
       - name: Report
         if: always()
