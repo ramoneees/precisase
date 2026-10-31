@@ -15,12 +15,12 @@
 
 -- CreateIndex — full-text search over search_vector (FR07), recreated
 -- exactly as originally defined.
-CREATE INDEX "posts_search_vector_idx" ON "posts" USING GIN ("search_vector");
+CREATE INDEX IF NOT EXISTS "posts_search_vector_idx" ON "posts" USING GIN ("search_vector");
 
 -- CreateIndex — pg_trgm trigram indexes over (title, description) (FR07),
 -- recreated exactly as originally defined.
-CREATE INDEX "posts_title_trgm_idx" ON "posts" USING GIN ("title" gin_trgm_ops);
-CREATE INDEX "posts_description_trgm_idx" ON "posts" USING GIN ("description" gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS "posts_title_trgm_idx" ON "posts" USING GIN ("title" gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS "posts_description_trgm_idx" ON "posts" USING GIN ("description" gin_trgm_ops);
 
 -- AlterTable — FR13 ("Name, contact info, optional community/church
 -- affiliation"): add the optional church-affiliation field to User.
